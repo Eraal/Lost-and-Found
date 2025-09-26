@@ -1,0 +1,26 @@
+/* Minimal base styles that don't fight Tailwind */
+/* Ensure full-height layout for Tailwind utilities like min-h-screen */
+html, body, #root {
+  height: 100%;
+}
+body {
+  margin: 0;
+  font-family: var(--font-sans, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial);
+}
+
+/* Print styles: show a clean sheet with item details + QR */
+#print-area { display: none; }
+@media print {
+  @page { size: A4 portrait; margin: 12mm; }
+  /* Hide everything by default */
+  body * { visibility: hidden !important; }
+  /* Show only the print area */
+  #print-area, #print-area * { visibility: visible !important; }
+  #print-area { display: block !important; position: absolute; inset: 0; width: 100%; background: white; padding: 0; box-sizing: border-box; }
+  /* Optional helpers for print layout */
+  .print-sheet { page-break-after: avoid; padding: 8mm; }
+  .print-muted { color: #475569 !important; }
+  .print-small { font-size: 11px !important; }
+  /* Optional: shrink link underlines and colors for print */
+  a { color: #000 !important; text-decoration: underline; }
+}

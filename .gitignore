@@ -1,0 +1,61 @@
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pytest_cache/
+.mypy_cache/
+.pytype/
+.venv/
+venv/
+.env
+.env.*
+
+# Flask / instance
+instance/
+.flaskenv
+
+# Databases
+*.sqlite3
+*.db
+
+# Backend uploads and generated media
+backend/uploads/
+backend/uploads/**
+
+# Node / Vite / Frontend
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/
+.yarn/cache/
+.vite/
+frontend/.vite/
+frontend/dist/
+dist/
+
+# Logs
+*.log
+logs/
+
+# Coverage
+coverage/
+htmlcov/
+.coverage*
+
+# Build artifacts
+build/
+*.egg-info/
+
+# Misc
+*.local
+*.tmp
+*.bak

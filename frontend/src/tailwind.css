@@ -1,0 +1,83 @@
+@import "tailwindcss";
+
+/* Theme tokens (CSS variables for broad compatibility) */
+:root {
+	/* Typography */
+	--font-sans: "Poppins", "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+
+	/* LSPU CCS palette */
+	--lspu-white: #FFFFFF;
+	--lspu-orange: #DF7E2D;          /* Accent */
+	--lspu-blue: #32498D;            /* Support accent */
+	--lspu-blue-dark: #2A4289;
+	--lspu-maroon: #6B1E2C;          /* Primary (Dark Maroon) */
+	--lspu-maroon-dark: #531823;     /* Stronger shade for hover/CTA */
+
+	/* RGB channels for subtle tints */
+	--brand-rgb: 107 30 44;          /* from --lspu-maroon */
+	--accent-rgb: 223 126 45;        /* from --lspu-orange */
+	--support-rgb: 50 73 141;        /* from --lspu-blue */
+
+	/* Back-compat for any older tokens still referenced */
+	--ccs-forest: var(--lspu-blue);
+	--ccs-forest-600: var(--lspu-blue-dark);
+	--ccs-forest-700: var(--lspu-blue-dark);
+	--ccs-forest-900: #1e2b59; /* deeper blue used rarely */
+	--ccs-gold: var(--lspu-orange);
+	--ccs-gold-600: #c4671f;
+	/* Neutral ink scale for text and subtle UI*/
+	--ink: #0f172a;               /* slate-900 */
+	--ink-700: #334155;           /* slate-700 */
+	--ink-600: #475569;           /* slate-600 */
+	--ink-500: #64748b;           /* slate-500 */
+	--ink-400: #94a3b8;           /* slate-400 */
+	--ink-300: #cbd5e1;           /* slate-300 */
+	--ink-200: #e2e8f0;           /* slate-200 */
+	--ink-100: #f1f5f9;           /* slate-100 */
+	--surface: #FAFAF8;           /* warm off-white for cards/surfaces */
+
+	/* Semantic shortcuts */
+	--brand: var(--lspu-maroon);
+	--brand-strong: var(--lspu-maroon-dark);
+	--accent: var(--lspu-orange);   /* Orange accent */
+	--support: var(--lspu-blue);    /* Blue support */
+}
+
+/* Subtle helper utilities */
+.bg-grid {
+	background-image: radial-gradient(#0f172a0d 1px, transparent 1px);
+	background-size: 18px 18px;
+	background-position: -1px -1px;
+}
+
+/* Page backdrop: subtle academic gradient with brand/support tints */
+.bg-academic {
+	background-image:
+		radial-gradient(60% 40% at 85% 0%, rgb(var(--brand-rgb) / 0.08), transparent 60%),
+		radial-gradient(40% 30% at 0% 100%, rgb(var(--support-rgb) / 0.07), transparent 60%),
+		linear-gradient(to bottom, var(--surface), rgb(var(--brand-rgb) / 0.02) 85%);
+	background-repeat: no-repeat;
+	background-attachment: fixed; /* slight parallax feel */
+}
+
+@keyframes fade-up {
+	from { opacity: 0; transform: translateY(12px); }
+	to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes floaty {
+	0%, 100% { transform: translateY(0); }
+	50% { transform: translateY(-6px); }
+}
+
+/* Use with class: motion-safe:animate-fade-up */
+@media (prefers-reduced-motion: no-preference) {
+	.animate-fade-up { animation: fade-up 0.6s ease-out both; }
+	.animate-floaty { animation: floaty 6s ease-in-out infinite; }
+}
+
+/* Utility to force show only in print if ever used */
+@media print {
+	.print-only { display: block !important; }
+	.screen-only { display: none !important; }
+}
