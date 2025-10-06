@@ -248,6 +248,28 @@ export async function scanQrCode(code: string): Promise<ScanResult> {
   return data
 }
 
+// Auto-found reporting: scan a QR code belonging to a LOST item and auto-create a FOUND report
+export type AutoFoundResponse = {
+  lostItem: ItemDto
+  foundItem: ItemDto
+  match: { lostItemId: number; foundItemId: number; score: number; status: string }
+  message?: string
+} | { error: string; detail?: string }
+
+export async function autoReportFoundFromQr(code: string, params?: { reporterUserId?: number; location?: string }): Promise<AutoFoundResponse> {
+  const body: Record<string, unknown> = {}
+  if (typeof params?.reporterUserId === 'number') body.reporterUserId = params.reporterUserId
+  if (params?.location) body.location = params.location
+  const res = await fetch(`${API_BASE}/qrcodes/${encodeURIComponent(code)}/auto-found`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  const data = await res.json().catch(() => ({})) as AutoFoundResponse
+  if (!res.ok) return data
+  return data
+}
+
 // Claims
 export type ClaimUserLite = {
   id?: number

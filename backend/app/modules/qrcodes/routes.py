@@ -12,6 +12,8 @@ from flask import Blueprint, jsonify, current_app, request, send_file, url_for, 
 from ...extensions import db
 from ...models.qr_code import QRCode
 from ...models.item import Item
+from ...models.match import Match
+from ...models.notification import Notification
 
 
 bp = Blueprint("qrcodes", __name__, url_prefix="/qrcodes")
@@ -201,3 +203,186 @@ def resolve_code(code: str):
         },
         "instructions": "If this item belongs to you, log in to the Lost & Found portal and request a claim for this item.",
     })
+
+
+@bp.post("/<string:code>/auto-found")
+def auto_report_found(code: str):
+    """Scan a QR code attached to a LOST item and automatically create a matching FOUND report.
+
+    Workflow:
+      * Locate QR code + associated lost item.
+      * Create a new 'found' Item cloning key descriptive fields (title, description).
+        Optional client-provided location overrides original lost location.
+      * Create/Upsert a Match (score 100, status confirmed) between lost and found items.
+      * Update lost item status to 'matched' (idempotent).
+      * Generate an in-app Notification for the original reporter (owner) that their item may have been found.
+      * Return payload containing both records.
+
+    Request JSON (all optional): { reporterUserId?: int, location?: str }
+    """
+    data = request.get_json(silent=True) or {}
+    reporter_user_id = data.get("reporterUserId")
+    location_override = (data.get("location") or "").strip() or None
+
+    # Resolve QR code row
+    qr: Optional[QRCode] = QRCode.query.filter_by(code=code).first()
+    if not qr or not qr.item_id:
+        return jsonify({"error": "QR code not associated with an item"}), 404
+
+    base_item: Optional[Item] = Item.query.get(int(qr.item_id))
+    if not base_item:
+        return jsonify({"error": "Item not found"}), 404
+
+    # If the associated item is already a FOUND report, nothing to automate – just return it.
+    if (base_item.type or "").lower() == "found":
+        return jsonify({
+            "foundItem": {
+                "id": int(base_item.id),
+                "type": base_item.type,
+                "title": base_item.title,
+                "status": base_item.status,
+            },
+            "message": "QR code already linked to a found item.",
+        }), 200
+
+    # Only proceed if the base item is a LOST report
+    if (base_item.type or "").lower() != "lost":
+        return jsonify({"error": "QR code item is not a lost report"}), 400
+
+    # Validate reporter id if provided
+    reporter_id_int: Optional[int] = None
+    if reporter_user_id is not None:
+        try:
+            reporter_id_int = int(reporter_user_id)
+        except Exception:
+            return jsonify({"error": "Invalid reporterUserId"}), 400
+
+    # Idempotency: If a 100% confirmed match already exists for this lost item, reuse it
+    existing_match: Optional[Match] = (
+        Match.query.filter_by(lost_item_id=base_item.id, status="confirmed").order_by(Match.created_at.asc()).first()
+    )
+    if existing_match:
+        found_item = Item.query.get(existing_match.found_item_id)
+        if found_item:
+            return jsonify({
+                "lostItem": {
+                    "id": int(base_item.id),
+                    "type": base_item.type,
+                    "title": base_item.title,
+                    "status": base_item.status,
+                },
+                "foundItem": {
+                    "id": int(found_item.id),
+                    "type": found_item.type,
+                    "title": found_item.title,
+                    "status": found_item.status,
+                },
+                "message": "Found report already exists for this lost item.",
+            }), 200
+
+    # Create new found item cloning descriptive fields
+    from datetime import date as _date
+    found_item = Item(
+        type="found",
+        title=base_item.title,
+        description=base_item.description,
+        location=location_override or base_item.location,
+        occurred_on=_date.today(),
+        photo_url=base_item.photo_url,  # reuse photo if any; finder can edit later
+        reporter_user_id=reporter_id_int,
+    )
+    db.session.add(found_item)
+
+    # Prepare notification (after commit we may publish SSE)
+    notif: Optional[Notification] = None
+    try:
+        db.session.flush()  # ensure found_item.id
+    except Exception:
+        pass
+
+    # Upsert match (score 100)
+    match = Match(lost_item_id=base_item.id, found_item_id=found_item.id, score=100, status="confirmed")
+    db.session.add(match)
+
+    # Update lost item status if still open
+    try:
+        if base_item.status == "open":
+            base_item.status = "matched"
+    except Exception:
+        pass
+
+    # Notification to owner of lost item
+    if base_item.reporter_user_id:
+        try:
+            notif = Notification(
+                user_id=base_item.reporter_user_id,
+                channel="inapp",
+                title="Your item may have been found",
+                body=f"A found report was automatically generated from a QR scan for ‘{base_item.title}’.",
+                payload={
+                    "kind": "auto_found",
+                    "lostItemId": int(base_item.id),
+                    "foundItemId": lambda: int(found_item.id) if found_item.id else None,  # resolved after commit
+                    "code": code,
+                },
+            )
+            db.session.add(notif)
+        except Exception:
+            pass
+
+    # Update scan meta
+    try:
+        qr.scan_count = int(qr.scan_count or 0) + 1
+        qr.last_scanned_at = datetime.utcnow()
+    except Exception:
+        pass
+
+    try:
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"error": "Failed to persist auto-found report", "detail": str(e)}), 500
+
+    # Publish SSE notification best-effort
+    try:
+        if notif and base_item.reporter_user_id:
+            from ..notifications.bus import publish as publish_notif  # type: ignore
+            publish_notif(int(base_item.reporter_user_id), {
+                "type": "notification",
+                "notification": {
+                    "id": getattr(notif, 'id', None),
+                    "title": notif.title,
+                    "message": notif.body,
+                    "payload": {"kind": "auto_found", "lostItemId": int(base_item.id), "foundItemId": int(found_item.id)},
+                    "createdAt": notif.created_at.isoformat() if notif.created_at else None,
+                    "read": False,
+                },
+            })
+    except Exception:
+        pass
+
+    def _map_item(it: Item) -> dict:
+        return {
+            "id": int(it.id),
+            "type": it.type,
+            "title": it.title,
+            "description": it.description,
+            "location": it.location,
+            "occurredOn": it.occurred_on.isoformat() if it.occurred_on else None,
+            "reportedAt": it.reported_at.isoformat() if it.reported_at else None,
+            "status": it.status,
+            "photoUrl": it.photo_url,
+            "reporterUserId": int(it.reporter_user_id) if it.reporter_user_id else None,
+        }
+
+    return jsonify({
+        "lostItem": _map_item(base_item),
+        "foundItem": _map_item(found_item),
+        "match": {
+            "lostItemId": int(base_item.id),
+            "foundItemId": int(found_item.id),
+            "score": 100,
+            "status": "confirmed",
+        },
+        "message": "Auto-found report created successfully.",
+    }), 201

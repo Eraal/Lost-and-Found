@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../../../lib/useAuth'
-import { createFoundItem, listItems, type CreateFoundItemInput, type ItemDto, getSuggestionsForItem, type Suggestion } from '../../../lib/api'
+import { createFoundItem, listItems, type CreateFoundItemInput, type ItemDto, getSuggestionsForItem, type Suggestion, autoReportFoundFromQr } from '../../../lib/api'
+import QrCameraScanner from '../../../components/QrCameraScanner'
 
 type FormState = {
   title: string
@@ -19,6 +20,10 @@ export default function ReportFoundPage() {
   const [recent, setRecent] = useState<ItemDto[] | null>(null)
   const [loadingList, setLoadingList] = useState(false)
   const [suggestions, setSuggestions] = useState<Suggestion[] | null>(null)
+  const [qrMode, setQrMode] = useState(false)
+  const [qrResult, setQrResult] = useState<string | null>(null)
+  const [autoFoundMessage, setAutoFoundMessage] = useState<string | null>(null)
+  const [autoFoundLoading, setAutoFoundLoading] = useState(false)
 
   async function loadRecent() {
     if (!user) return
@@ -76,6 +81,33 @@ export default function ReportFoundPage() {
       setErrors((prev) => ({ ...prev, title: msg }))
     } finally {
       setSubmitting(false)
+    }
+  }
+
+  // Simulated QR scanner integration: in a production scenario integrate a camera component (e.g., html5-qrcode or a small custom WebRTC reader)
+  async function handleQrScanSubmit() {
+    if (!qrResult || !user) return
+    setAutoFoundLoading(true)
+    setAutoFoundMessage(null)
+    try {
+      const resp = await autoReportFoundFromQr(qrResult, { reporterUserId: user.id, location: form.location || undefined })
+      if ('error' in resp) {
+        setAutoFoundMessage(resp.error)
+      } else {
+        setAutoFoundMessage(resp.message || 'Auto-found report created.')
+        setSuccessId(resp.foundItem.id)
+        loadRecent()
+        try {
+          const s = await getSuggestionsForItem(resp.foundItem.id, 5, 0.5)
+          setSuggestions(s)
+        } catch {
+          setSuggestions([])
+        }
+      }
+    } catch (e) {
+      setAutoFoundMessage(e instanceof Error ? e.message : 'Failed to auto-report')
+    } finally {
+      setAutoFoundLoading(false)
     }
   }
 
@@ -177,7 +209,7 @@ export default function ReportFoundPage() {
                   )}
                 </div>
 
-                <div className="flex items-center gap-3 pt-1">
+                <div className="flex flex-wrap items-center gap-3 pt-1">
                   <button
                     type="submit"
                     disabled={submitting}
@@ -191,8 +223,50 @@ export default function ReportFoundPage() {
                     )}
                     Submit report
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => { setQrMode(m => !m); setAutoFoundMessage(null); setQrResult(null) }}
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-black/10 bg-white/80 px-4 py-2.5 text-sm font-medium hover:bg-black/5 focus:outline-none focus:ring-2 focus:ring-[color:var(--brand)]/40"
+                  >
+                    {qrMode ? 'Close QR Mode' : 'Scan QR Code'}
+                  </button>
                   <p className="text-sm text-[var(--ink-600)]">We’ll notify when a student claims and verifies ownership.</p>
                 </div>
+
+                {qrMode && (
+                  <div className="mt-4 rounded-lg border border-dashed border-[color:var(--brand)]/40 bg-[color:var(--brand)]/5 p-4 space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="text-sm font-medium text-[color:var(--brand)]">QR Scan Mode</div>
+                      <div className="text-[10px] text-[var(--ink-600)]">Point camera at item QR. Auto-stops on detection.</div>
+                    </div>
+                    <QrCameraScanner
+                      onResult={(code) => { setQrResult(code); setTimeout(handleQrScanSubmit, 10) }}
+                      onError={(e) => setAutoFoundMessage(e.message)}
+                      continuous={false}
+                      className="w-full"
+                    />
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder="Or paste QR code manually"
+                        value={qrResult ?? ''}
+                        onChange={(e) => setQrResult(e.target.value.trim())}
+                        className="flex-1 min-w-[220px] rounded-md border border-black/10 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--brand)]/40"
+                      />
+                      <button
+                        type="button"
+                        disabled={!qrResult || autoFoundLoading}
+                        onClick={handleQrScanSubmit}
+                        className="inline-flex items-center gap-2 rounded-md bg-[color:var(--brand)] text-white px-4 py-2 text-sm font-medium ring-1 ring-[color:var(--brand)]/20 disabled:opacity-60"
+                      >
+                        {autoFoundLoading && <svg className="size-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" className="opacity-25" /><path d="M21 12a9 9 0 0 1-9 9" /></svg>}
+                        Auto Report
+                      </button>
+                    </div>
+                    {qrResult && !autoFoundLoading && <div className="text-[10px] text-[var(--ink-600)]">Detected: <span className="font-medium break-all">{qrResult}</span></div>}
+                    {autoFoundMessage && <div className="text-xs text-[var(--ink-700)]">{autoFoundMessage}</div>}
+                  </div>
+                )}
               </form>
               {/* Sidebar: recent found reports */}
               <aside className="lg:border-l lg:pl-8 border-black/5 space-y-6">
