@@ -13,6 +13,13 @@ from ...models.user import User
 from ...models.claim import Claim
 from ...models.notification import Notification
 from ...models.app_setting import AppSetting
+from ...models.audit_log import AuditLog
+try:
+    # Reuse notifications bus for SSE
+    from ..notifications.bus import publish as publish_notif  # type: ignore  # already imported above but ensure availability
+except Exception:  # pragma: no cover
+    def publish_notif(user_id: int, event: dict):  # type: ignore
+        return None
 try:
     from ..notifications.bus import publish as publish_notif  # type: ignore
 except Exception:  # pragma: no cover
@@ -425,16 +432,155 @@ def admin_mark_returned(item_id: int):
     return jsonify({"item": _item_to_admin_dict(it, ui_st)})
 
 
+@bp.delete("/items/<int:item_id>")
+def admin_delete_item(item_id: int):
+    """Permanently delete an item and cascading related entities.
+
+    This will remove associated claims, matches (lost & found sides), social posts,
+    and QR codes via SQLAlchemy relationship cascades defined on the Item model.
+    """
+    it: Item | None = Item.query.get(item_id)
+    if not it:
+        return jsonify({"error": "Item not found"}), 404
+    try:
+        db.session.delete(it)
+        db.session.commit()
+    except Exception as e:  # pragma: no cover - defensive
+        db.session.rollback()
+        return jsonify({"error": "Failed to delete item"}), 500
+    return jsonify({"deleted": True, "id": item_id})
+
+
+@bp.patch("/claims/<int:claim_id>")
+def admin_update_claim(claim_id: int):
+    """Admin endpoint to update claim status with real-time student notification.
+
+    Body: { status: approved|rejected|pending, adminId?: int, adminNotes?: str }
+    Mirrors core logic in user-facing claims route but exposed under /admin for clarity.
+    """
+    claim: Claim | None = Claim.query.get(claim_id)
+    if not claim:
+        return jsonify({"error": "Claim not found"}), 404
+    data = request.get_json(silent=True) or {}
+    status = (data.get("status") or "").lower().strip()
+    if status not in {"approved", "rejected", "pending"}:
+        return jsonify({"error": "Invalid status"}), 400
+    new_status = "requested" if status == "pending" else status
+    prev_status = claim.status
+    admin_id = data.get("adminId") if isinstance(data.get("adminId"), int) else None
+    admin_notes = (data.get("adminNotes") or "").strip() or None
+
+    claim.status = new_status
+    if admin_id:
+        claim.admin_verifier_id = admin_id
+    claim.approved_at = datetime.utcnow() if new_status == "approved" else None
+
+    item = claim.item
+    if new_status == "approved" and item is not None:
+        try:
+            item.status = "claimed"
+        except Exception:
+            pass
+        db.session.add(Notification(
+            user_id=claim.claimant_user_id,
+            channel="inapp",
+            title="Claim approved",
+            body=f"Your claim for ‘{getattr(item, 'title', 'the item')}’ was approved. Please pick it up from the office.",
+            payload={"kind": "claim", "action": "approved", "itemId": int(claim.item_id), "claimId": int(claim.id)},
+        ))
+    elif new_status == "rejected" and item is not None:
+        db.session.add(Notification(
+            user_id=claim.claimant_user_id,
+            channel="inapp",
+            title="Claim rejected",
+            body=f"Your claim for ‘{getattr(item, 'title', 'the item')}’ was rejected.",
+            payload={"kind": "claim", "action": "rejected", "itemId": int(claim.item_id), "claimId": int(claim.id)},
+        ))
+    elif new_status == "requested" and item is not None and prev_status != new_status:
+        db.session.add(Notification(
+            user_id=claim.claimant_user_id,
+            channel="inapp",
+            title="Claim pending review",
+            body=f"Your claim for ‘{getattr(item, 'title', 'the item')}’ is pending admin review.",
+            payload={"kind": "claim", "action": "pending", "itemId": int(claim.item_id), "claimId": int(claim.id)},
+        ))
+
+    if admin_notes:
+        db.session.add(AuditLog(
+            actor_user_id=admin_id,
+            action="claim_status_update",
+            entity_type="claim",
+            entity_id=int(claim.id),
+            details={"fromStatus": prev_status, "toStatus": new_status, "adminNote": admin_notes},
+        ))
+
+    db.session.commit()
+
+    # Stream last notification
+    try:
+        recent = (
+            Notification.query.filter_by(user_id=claim.claimant_user_id)
+            .order_by(Notification.created_at.desc()).limit(1).all()
+        )
+        for n in recent:
+            if isinstance(n.payload, dict) and n.payload.get("kind") == "claim":
+                publish_notif(int(claim.claimant_user_id), {
+                    "type": "notification",
+                    "notification": {
+                        "id": n.id,
+                        "title": n.title,
+                        "message": n.body,
+                        "createdAt": n.created_at.isoformat() if n.created_at else None,
+                        "read": bool(n.read_at),
+                        "payload": n.payload,
+                    },
+                })
+    except Exception:
+        pass
+
+    return jsonify({
+        "claim": {
+            "id": claim.id,
+            "itemId": claim.item_id,
+            "claimantId": claim.claimant_user_id,
+            "status": claim.status,
+            "approvedAt": claim.approved_at.isoformat() if claim.approved_at else None,
+            "adminNote": admin_notes,
+        }
+    })
+
+
 @bp.get("/settings")
 def admin_get_settings():
+    """Return structured admin-configurable settings.
+
+    Sections:
+      - social.facebook.autoPost
+      - features.* (dynamic feature toggles)
+    """
     auto_post_fb = AppSetting.get_bool("social.facebook.auto_post", False)
+
+    # Feature toggles (add new keys here as needed)
+    feature_keys: dict[str, tuple[str, bool]] = {
+        # key_in_db: (response_path, default)
+        "features.auto_matching.enabled": ("autoMatching", True),
+        "features.qrcodes.enabled": ("qrCodes", True),
+        "features.claims.auto_verify": ("claimsAutoVerify", False),
+        "features.notifications.inapp": ("notifInApp", True),
+    }
+    # Build feature settings output
+    feats: dict[str, bool] = {}
+    for k, (resp_name, default) in feature_keys.items():
+        feats[resp_name] = AppSetting.get_bool(k, default)
+
     return jsonify({
         "settings": {
             "social": {
                 "facebook": {
                     "autoPost": auto_post_fb,
                 }
-            }
+            },
+            "features": feats,
         }
     })
 
@@ -449,6 +595,20 @@ def admin_update_settings():
         val = bool(fb.get("autoPost"))
         AppSetting.set_bool("social.facebook.auto_post", val)
         changed.setdefault("social", {}).setdefault("facebook", {})["autoPost"] = val
+    # Feature toggles
+    features = data.get("features") or {}
+    if isinstance(features, dict):
+        # Map expected response field names back to DB keys
+        feature_map: dict[str, str] = {
+            "autoMatching": "features.auto_matching.enabled",
+            "qrCodes": "features.qrcodes.enabled",
+            "claimsAutoVerify": "features.claims.auto_verify",
+            "notifInApp": "features.notifications.inapp",
+        }
+        for resp_name, db_key in feature_map.items():
+            if resp_name in features:
+                AppSetting.set_bool(db_key, bool(features.get(resp_name)))
+                changed.setdefault("features", {})[resp_name] = bool(features.get(resp_name))
     if not changed:
         return jsonify({"error": "No recognized settings"}), 400
     return jsonify({"updated": changed})

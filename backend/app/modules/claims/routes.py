@@ -301,6 +301,25 @@ def update_claim_status(claim_id: int):
             )
         except Exception:
             pass
+    elif new_status == "requested" and item is not None and prev_status != new_status:
+        # Notify claimant when status transitions back (or to) pending/requested
+        try:
+            db.session.add(
+                Notification(
+                    user_id=claim.claimant_user_id,
+                    channel="inapp",
+                    title="Claim pending review",
+                    body=f"Your claim for ‘{getattr(item, 'title', 'the item')}’ is pending admin review.",
+                    payload={
+                        "kind": "claim",
+                        "action": "pending",
+                        "itemId": int(claim.item_id),
+                        "claimId": int(claim.id),
+                    },
+                )
+            )
+        except Exception:
+            pass
 
     # Record admin note and status change in audit log if provided
     if admin_notes:
@@ -326,9 +345,10 @@ def update_claim_status(claim_id: int):
     # Publish SSE events for notifications best-effort
     try:
         if user is not None:
+            # Stream only the most recent 1 claim-related notification (the one we just inserted)
             recent = (
                 Notification.query.filter_by(user_id=claim.claimant_user_id)
-                .order_by(Notification.created_at.desc()).limit(2).all()
+                .order_by(Notification.created_at.desc()).limit(1).all()
             )
             for n in recent:
                 if isinstance(n.payload, dict) and n.payload.get("kind") == "claim":
