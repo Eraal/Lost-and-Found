@@ -17,6 +17,8 @@ type ItemCard = {
   photoThumbUrl?: string | null
   status?: 'open' | 'matched' | 'claimed' | 'closed' | string
   reporterUserId?: number | null
+  reporter?: { id?: number | null; firstName?: string | null; lastName?: string | null; email?: string | null }
+  finderName?: string | null
 }
 
 export default function SearchPage() {
@@ -129,6 +131,13 @@ export default function SearchPage() {
             photoThumbUrl: it.photoThumbUrl || undefined,
             status: (it.status as ItemCard['status']) ?? 'open',
             reporterUserId: typeof it.reporterUserId === 'number' ? it.reporterUserId : null,
+            reporter: it.reporter ? {
+              id: it.reporter.id,
+              firstName: it.reporter.firstName,
+              lastName: it.reporter.lastName,
+              email: it.reporter.email,
+            } : undefined,
+            finderName: it.type === 'found' && it.reporter ? [it.reporter.firstName, it.reporter.lastName].filter(Boolean).join(' ') || (it.reporter.email ?? null) : null,
           }))
           setItems(mapped)
         }
@@ -637,6 +646,15 @@ export default function SearchPage() {
                         You reported this
                       </span>
                     )}
+                    {it.type === 'found' && it.finderName && (
+                      <span className="absolute bottom-3 left-3 inline-flex items-center gap-1 rounded-full bg-white/90 text-[color:var(--ink-800)] text-[10px] font-medium px-2 py-1 border border-emerald-500/30 backdrop-blur" title={`Finder: ${it.finderName}`}>
+                        <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                          <path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/>
+                        </svg>
+                        <span className="font-semibold">Finder:</span>
+                        {it.finderName}
+                      </span>
+                    )}
                     {/* Requested flag overlay */}
                     {it.type === 'found' && (requested.has(Number(it.id))) && (
                       <span className="absolute bottom-3 right-3 rounded-full bg-amber-500 text-white text-[10px] font-semibold px-2 py-1 shadow-sm">Claim requested</span>
@@ -712,7 +730,7 @@ export default function SearchPage() {
 
         <ItemDetailsModal
           open={details.open}
-          item={details.item}
+          item={details.item ? { ...details.item } : null}
           isOwner={Boolean(user && details.item && typeof details.item.reporterUserId === 'number' && details.item.reporterUserId === user.id)}
           onClose={() => setDetails({ open: false, item: null })}
           onRequestClaim={(itemId: number, title?: string) => {

@@ -125,6 +125,7 @@ export type ItemDto = {
   photoUrl?: string | null
   photoThumbUrl?: string | null
   reporterUserId?: number | null
+  reporter?: { id?: number | null; email?: string | null; firstName?: string | null; lastName?: string | null; studentId?: string | null } | null
 }
 
 export async function createLostItem(input: CreateLostItemInput, reporterUserId?: number): Promise<ItemDto> {
@@ -134,12 +135,10 @@ export async function createLostItem(input: CreateLostItemInput, reporterUserId?
   if (input.description) fd.set('description', input.description)
   if (input.location) fd.set('location', input.location)
   if (input.occurredOn) fd.set('occurredOn', input.occurredOn)
-  if (typeof reporterUserId === 'number') fd.set('reporterUserId', String(reporterUserId))
   if (input.photoFile instanceof File) fd.set('photo', input.photoFile)
-  const res = await fetch(`${API_BASE}/items`, {
-    method: 'POST',
-    body: fd,
-  })
+  const headers: Record<string, string> = {}
+  if (typeof reporterUserId === 'number') headers['X-User-Id'] = String(reporterUserId)
+  const res = await fetch(`${API_BASE}/items`, { method: 'POST', body: fd, headers })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
     const msg = (data && (data.error || data.message)) || 'Failed to submit report'
@@ -155,12 +154,10 @@ export async function createFoundItem(input: CreateFoundItemInput, reporterUserI
   if (input.description) fd.set('description', input.description)
   if (input.location) fd.set('location', input.location)
   if (input.occurredOn) fd.set('occurredOn', input.occurredOn)
-  if (typeof reporterUserId === 'number') fd.set('reporterUserId', String(reporterUserId))
   if (input.photoFile instanceof File) fd.set('photo', input.photoFile)
-  const res = await fetch(`${API_BASE}/items`, {
-    method: 'POST',
-    body: fd,
-  })
+  const headers: Record<string, string> = {}
+  if (typeof reporterUserId === 'number') headers['X-User-Id'] = String(reporterUserId)
+  const res = await fetch(`${API_BASE}/items`, { method: 'POST', body: fd, headers })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
     const msg = (data && (data.error || data.message)) || 'Failed to submit report'
@@ -224,6 +221,13 @@ export async function adminMarkReturned(itemId: number): Promise<AdminItem> {
   return (data.item as AdminItem)
 }
 
+export async function adminDeleteItem(itemId: number): Promise<{ deleted: boolean; id: number }> {
+  const res = await fetch(`${API_BASE}/admin/items/${itemId}`, { method: 'DELETE' })
+  const data = await res.json().catch(() => ({})) as { deleted?: boolean; id?: number; error?: string }
+  if (!res.ok || !data.deleted) throw new Error((data && data.error) || 'Failed to delete item')
+  return { deleted: true, id: Number(data.id || itemId) }
+}
+
 // QR Codes
 export type QrCodeDto = { code: string; itemId?: number | null; scanCount?: number; lastScannedAt?: string | null; url?: string }
 export async function getItemQrCode(itemId: number): Promise<QrCodeDto | null> {
@@ -258,13 +262,11 @@ export type AutoFoundResponse = {
 
 export async function autoReportFoundFromQr(code: string, params?: { reporterUserId?: number; location?: string }): Promise<AutoFoundResponse> {
   const body: Record<string, unknown> = {}
-  if (typeof params?.reporterUserId === 'number') body.reporterUserId = params.reporterUserId
+  // Reporter inferred via header now; legacy body field omitted unless older backend
   if (params?.location) body.location = params.location
-  const res = await fetch(`${API_BASE}/qrcodes/${encodeURIComponent(code)}/auto-found`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (typeof params?.reporterUserId === 'number') headers['X-User-Id'] = String(params.reporterUserId)
+  const res = await fetch(`${API_BASE}/qrcodes/${encodeURIComponent(code)}/auto-found`, { method: 'POST', headers, body: JSON.stringify(body) })
   const data = await res.json().catch(() => ({})) as AutoFoundResponse
   if (!res.ok) return data
   return data
@@ -417,6 +419,26 @@ export async function markClaimReturned(claimId: number): Promise<ClaimDto> {
     item: c.item,
     user: c.user,
   adminNote: c.adminNote ?? null,
+  }
+}
+
+export async function getClaim(claimId: number): Promise<ClaimDto | null> {
+  const res = await fetch(`${API_BASE}/claims/${claimId}`)
+  const data = await res.json().catch(() => ({})) as { claim?: ClaimRecord, error?: string }
+  if (!res.ok) return null
+  const c = data.claim as ClaimRecord | undefined
+  if (!c) return null
+  return {
+    id: c.id,
+    itemId: c.itemId,
+    claimantUserId: c.claimantId,
+    status: c.status,
+    createdAt: c.createdAt ?? null,
+    approvedAt: c.approvedAt ?? null,
+    notes: c.notes ?? null,
+    item: c.item,
+    user: c.user,
+    adminNote: c.adminNote ?? null,
   }
 }
 

@@ -1,7 +1,7 @@
 from datetime import datetime, date
 import os
 import secrets
-from flask import Blueprint, request, jsonify, current_app, url_for
+from flask import Blueprint, request, jsonify, current_app, url_for, g
 
 from io import BytesIO
 from PIL import Image
@@ -55,7 +55,7 @@ def _item_to_dict(it: Item) -> dict:
                 thumb_url = it.photo_url.replace("/uploads/", "/uploads/thumbs/", 1)
         except Exception:
             thumb_url = None
-    return {
+    payload = {
         "id": it.id,
         "type": it.type,
         "title": it.title,
@@ -68,6 +68,21 @@ def _item_to_dict(it: Item) -> dict:
         "photoThumbUrl": thumb_url,
         "reporterUserId": it.reporter_user_id,
     }
+    # Enrich with reporter (finder) details when relationship is available. This allows
+    # the frontend to show the name of the user who reported a FOUND (unclaimed) item.
+    try:
+        if getattr(it, "reporter", None):
+            r = it.reporter  # type: ignore[attr-defined]
+            payload["reporter"] = {
+                "id": getattr(r, "id", None),
+                "email": getattr(r, "email", None),
+                "firstName": getattr(r, "first_name", None),
+                "lastName": getattr(r, "last_name", None),
+                "studentId": getattr(r, "student_id", None),
+            }
+    except Exception:  # pragma: no cover - enrichment is best-effort
+        pass
+    return payload
 
 
 def _auto_match_for_item(item: Item, threshold: float = 0.5, limit: int = 200) -> list[dict]:
@@ -251,6 +266,7 @@ def list_items():
             pass
 
     items = q.order_by(Item.reported_at.desc()).limit(max(0, limit)).all()
+    # NOTE: We intentionally reuse _item_to_dict which now includes optional reporter data.
     return jsonify({"items": [_item_to_dict(it) for it in items]})
 
 
@@ -259,7 +275,9 @@ def create_item():
     """Create a lost/found item.
 
     Accepts either application/json or multipart/form-data.
-    For multipart, expects fields: type, title, description, location, occurredOn, reporterUserId, and file field 'photo'.
+    For multipart, expects fields: type, title, description, location, occurredOn, and file field 'photo'.
+    Reporter attribution is automatic from the current user context (X-User-Id header) and
+    the legacy reporterUserId field is ignored if a current user is resolved.
     """
     content_type = request.content_type or ""
     is_multipart = content_type.startswith("multipart/form-data")
@@ -275,6 +293,7 @@ def create_item():
         description = (form.get("description") or "").strip() or None
         location = (form.get("location") or "").strip() or None
         occurred_on = _parse_date(form.get("occurredOn") or form.get("occurred_on"))
+        # Legacy reporter field (will be overridden by authenticated user if present)
         reporter = form.get("reporterUserId") or form.get("reporter_user_id")
         photo_file = request.files.get("photo")
 
@@ -359,7 +378,15 @@ def create_item():
         return jsonify({"error": "Title is required"}), 400
 
     reporter_id = None
-    if reporter is not None:
+    # Preferred: current authenticated user id from request context
+    current_uid = getattr(g, 'current_user_id', None)
+    if current_uid:
+        try:
+            reporter_id = int(current_uid)
+        except Exception:
+            reporter_id = None
+    elif reporter is not None:
+        # Backward compatibility for older clients still sending reporterUserId
         try:
             reporter_id = int(reporter)
         except (TypeError, ValueError):
@@ -460,8 +487,7 @@ def create_item():
             # Check if QR exists; if not, create one
             existing = QRCode.query.filter_by(item_id=item.id).first()
             if not existing:
-                # Generate unique code
-                import secrets
+                # Generate unique code (module-level 'secrets' already imported; avoid re-import inside function)
                 code = None
                 for _ in range(10):
                     cand = secrets.token_urlsafe(8).replace("_", "").replace("-", "").lower()
@@ -478,6 +504,18 @@ def create_item():
 
     # Response
     payload = _item_to_dict(item)
+    # Enrich reporter block for convenience in responses (mirrors admin output shape subset)
+    try:
+        if item.reporter:
+            payload["reporter"] = {
+                "id": item.reporter.id,
+                "email": getattr(item.reporter, 'email', None),
+                "firstName": getattr(item.reporter, 'first_name', None),
+                "lastName": getattr(item.reporter, 'last_name', None),
+                "studentId": getattr(item.reporter, 'student_id', None),
+            }
+    except Exception:
+        pass
     try:
         if (item.type or "").lower() == "found":
             # Include QR URLs for convenience if blueprint is mounted

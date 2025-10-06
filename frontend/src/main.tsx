@@ -10,6 +10,7 @@ import ReportLostPage from './app/routes/user/ReportLost.tsx'
 import ReportFoundPage from './app/routes/user/ReportFound.tsx'
 import MyReportsPage from './app/routes/user/MyReports.tsx'
 import MyClaimsTrackerPage from './app/routes/user/Claims.tsx'
+import ClaimStatusPage from './app/routes/user/ClaimStatus.tsx'
 import SettingsPage from './app/routes/user/Settings.tsx'
 import { createBrowserRouter, RouterProvider, useNavigate } from 'react-router-dom'
 import { useEffect } from 'react'
@@ -55,6 +56,7 @@ const router = createBrowserRouter([
   { path: 'dashboard', element: <StudentProtectedRoute><UserDashboard /></StudentProtectedRoute> },
   { path: 'my-reports', element: <StudentProtectedRoute><MyReportsPage /></StudentProtectedRoute> },
   { path: 'my-claims', element: <StudentProtectedRoute><MyClaimsTrackerPage /></StudentProtectedRoute> },
+  { path: 'claim/:claimId', element: <StudentProtectedRoute><ClaimStatusPage /></StudentProtectedRoute> },
   { path: 'settings', element: <StudentProtectedRoute><SettingsPage /></StudentProtectedRoute> },
     ],
   },

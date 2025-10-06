@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-// @ts-expect-error jsqr lacks bundled TypeScript types
 import jsQR from 'jsqr'
 
 export type QrCameraScannerProps = {

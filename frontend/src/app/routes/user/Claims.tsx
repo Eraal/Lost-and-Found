@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { listClaims, type ClaimDto } from '../../../lib/api'
 import { useAuth } from '../../../lib/useAuth'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 type ClaimUiStatus = 'pending' | 'approved' | 'rejected' | 'returned'
 
@@ -147,6 +147,7 @@ export default function MyClaimsTrackerPage() {
 }
 
 function ClaimCard({ claim, ui, highlight }: { claim: ClaimDto, ui: ClaimUiStatus, highlight?: boolean }) {
+  const navigate = useNavigate()
   const created = claim.createdAt ? new Date(claim.createdAt) : null
   const approved = claim.approvedAt ? new Date(claim.approvedAt) : null
   const item = claim.item
@@ -158,7 +159,7 @@ function ClaimCard({ claim, ui, highlight }: { claim: ClaimDto, ui: ClaimUiStatu
   ]
   const rejected = stage === 'rejected'
   return (
-    <div id={`claim-${claim.id}`} className={`relative group overflow-hidden rounded-2xl border bg-white/80 backdrop-blur-sm shadow-sm hover:shadow-lg transition-all duration-300 ${highlight ? 'ring-2 ring-[color:var(--brand)] highlight-claim' : 'border-black/10'} ${rejected ? 'border-rose-200 bg-rose-50/60' : ''}`}>      
+  <div id={`claim-${claim.id}`} onClick={() => navigate(`/claim/${claim.id}`)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === 'Enter') navigate(`/claim/${claim.id}`)}} className={`relative group overflow-hidden rounded-2xl border bg-white/80 backdrop-blur-sm shadow-sm hover:shadow-lg transition-all duration-300 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--brand)]/50 ${highlight ? 'ring-2 ring-[color:var(--brand)] highlight-claim' : 'border-black/10'} ${rejected ? 'border-rose-200 bg-rose-50/60' : ''}`}>      
       <div className="p-5 space-y-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">

@@ -11,6 +11,7 @@ export type ItemLike = {
   reportedAt?: string | null
   photoUrl?: string | null
   photoThumbUrl?: string | null
+  finderName?: string | null
 }
 
 export default function ItemDetailsModal({
@@ -144,6 +145,11 @@ export default function ItemDetailsModal({
               <MetaTile label="Item ID" value={`#${String(item.id)}`} icon={(
                 <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M7 7h10v10H7z"/><path d="M3 3h4v4H3zM17 3h4v4h-4zM3 17h4v4H3zM17 17h4v4h-4z"/></svg>
               )} />
+              {item.type === 'found' && (
+                <MetaTile label="Finder" value={item.finderName || (isOwner ? 'You' : '—')} icon={(
+                  <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/></svg>
+                )} />
+              )}
             </div>
 
             {/* Actions */}

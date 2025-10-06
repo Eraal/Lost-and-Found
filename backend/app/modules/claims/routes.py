@@ -481,3 +481,79 @@ def mark_claim_returned(claim_id: int):
             } if item else None,
         }
     })
+
+
+@bp.get("/<int:claim_id>")
+def get_claim(claim_id: int):
+    """Fetch a single claim with enrichment similar to list/update responses.
+
+    Returns 404 if not found.
+    """
+    claim: Claim | None = Claim.query.get(claim_id)
+    if not claim:
+        return _json_error("Claim not found", 404)
+
+    # Enrich match score (best) for the related item
+    best_score: float | None = None
+    try:
+        rows = (
+            db.session.query(Match.lost_item_id, Match.found_item_id, Match.score)
+            .filter(db.or_(Match.lost_item_id == claim.item_id, Match.found_item_id == claim.item_id))
+            .all()
+        )
+        for lost_id, found_id, score in rows:
+            try:
+                s = float(score or 0)
+            except Exception:
+                s = 0.0
+            if best_score is None or s > best_score:
+                best_score = s
+    except Exception:
+        pass
+
+    # Latest admin note via audit log
+    admin_note: str | None = None
+    try:
+        log = (
+            AuditLog.query
+            .filter(AuditLog.entity_type == "claim", AuditLog.entity_id == int(claim.id))
+            .order_by(AuditLog.created_at.desc())
+            .first()
+        )
+        if log and isinstance(log.details, dict):
+            note = log.details.get("adminNote") or log.details.get("admin_note")
+            if isinstance(note, str) and note.strip():
+                admin_note = note.strip()
+    except Exception:
+        pass
+
+    item = claim.item
+    user = claim.claimant
+    return jsonify({
+        "claim": {
+            "id": claim.id,
+            "itemId": claim.item_id,
+            "claimantId": claim.claimant_user_id,
+            "status": claim.status,
+            "createdAt": claim.created_at.isoformat() if claim.created_at else None,
+            "approvedAt": claim.approved_at.isoformat() if claim.approved_at else None,
+            "notes": claim.notes,
+            "adminNote": admin_note,
+            "matchScore": best_score,
+            "item": {
+                "id": item.id if item else None,
+                "type": getattr(item, "type", None),
+                "title": getattr(item, "title", None),
+                "location": getattr(item, "location", None),
+                "status": getattr(item, "status", None),
+                "photoUrl": getattr(item, "photo_url", None),
+            } if item else None,
+            "user": {
+                "id": user.id if user else None,
+                "email": getattr(user, "email", None),
+                "firstName": getattr(user, "first_name", None),
+                "lastName": getattr(user, "last_name", None),
+                "studentId": getattr(user, "student_id", None),
+            } if user else None,
+        }
+    })

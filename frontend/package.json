@@ -10,10 +10,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "jsqr": "^1.4.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "react-router-dom": "^7.1.5",
-    "jsqr": "^1.4.0",
     "recharts": "^2.15.4"
   },
   "devDependencies": {

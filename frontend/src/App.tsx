@@ -101,7 +101,7 @@ function AppLayout() {
       const p = (n as unknown as { payload?: NotificationPayload }).payload
       if (p && p.kind === 'claim' && typeof p.claimId === 'number') {
         setNotifOpen(false)
-        navigate('/my-claims', { state: { focusClaimId: p.claimId } })
+        navigate(`/claim/${p.claimId}`)
         return
       }
       if (p && (p.kind === 'match' || (typeof p.lostItemId === 'number' && typeof p.foundItemId === 'number'))) {

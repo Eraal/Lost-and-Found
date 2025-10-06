@@ -1,11 +1,12 @@
 import type React from 'react'
 import { useState } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../../lib/useAuth'
 import logoUrl from '../../../assets/ccs-logo.svg'
 
 export default function AdminLayout() {
   const { user, logout } = useAuth()
+  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
 
   const adminDisplay = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.email || 'Admin'
@@ -46,17 +47,12 @@ export default function AdminLayout() {
             ]}
           />
 
-          <SectionLabel>Insights</SectionLabel>
-          <AdminNav
-            items={[
-              { to: '/admin/reports/statistics', label: 'Reports & Analytics', icon: ReportsIcon },
-            ]}
-          />
+          {/* Insights section removed per request */}
 
           <SectionLabel>System</SectionLabel>
           <AdminNav
             items={[
-              { to: '/admin/settings/categories', label: 'System Settings', icon: SettingsIcon },
+              { to: '/admin/settings/system', label: 'System Settings', icon: SettingsIcon },
             ]}
           />
         </nav>
@@ -64,7 +60,7 @@ export default function AdminLayout() {
         {/* Footer */}
         <div className="mt-auto p-3">
           <button
-            onClick={logout}
+            onClick={() => { logout(); navigate('/admin/login') }}
             className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-[color:var(--brand)] text-white px-3 py-2.5 text-sm font-medium shadow-sm shadow-[color:var(--brand)]/20 ring-1 ring-[color:var(--brand)]/20 transition-colors hover:bg-[color:var(--brand-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--brand)]/40"
           >
             Logout
@@ -123,15 +119,14 @@ export default function AdminLayout() {
                 size="sm"
               />
 
-              <SectionLabel>Insights</SectionLabel>
-              <AdminNav items={[{ to: '/admin/reports/statistics', label: 'Reports & Analytics', icon: ReportsIcon }]} size="sm" />
+              {/* Insights section removed per request (mobile) */}
 
               <SectionLabel>System</SectionLabel>
-              <AdminNav items={[{ to: '/admin/settings/categories', label: 'System Settings', icon: SettingsIcon }]} size="sm" />
+              <AdminNav items={[{ to: '/admin/settings/system', label: 'System Settings', icon: SettingsIcon }]} size="sm" />
             </div>
             <div className="mt-4">
               <button
-                onClick={logout}
+                onClick={() => { logout(); navigate('/admin/login') }}
                 className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-[color:var(--brand)] text-white px-3 py-2.5 text-sm font-medium shadow-sm shadow-[color:var(--brand)]/20 ring-1 ring-[color:var(--brand)]/20 transition-colors hover:bg-[color:var(--brand-strong)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--brand)]/40"
               >
                 Logout
@@ -257,14 +252,6 @@ function QrIcon(props: React.SVGProps<SVGSVGElement>) {
   )
 }
 
-function ReportsIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...props}>
-      <path d="M4 4h16v16H4z" />
-      <path d="M8 16l3-3 2 2 4-5" />
-    </svg>
-  )
-}
 
 function SettingsIcon(props: React.SVGProps<SVGSVGElement>) {
   return (

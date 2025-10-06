@@ -13,6 +13,7 @@ import {
   adminMarkReturned,
   getItemQrCode,
   createItemQrCode,
+  adminDeleteItem,
   type QrCodeDto,
 } from '../../../lib/api'
 
@@ -363,7 +364,7 @@ function ItemRow({ item, qr, onOpen, onEdit, onMarkReturned, onQr }: { item: Adm
             <span className="inline-flex items-center gap-1 font-medium truncate"><MapPinIcon /> {item.location || '—'}</span>
             {item.occurredOn && <span className="inline-flex items-center gap-1 font-medium"><CalendarIcon /> {new Date(item.occurredOn).toLocaleDateString()}</span>}
             {item.reportedAt && <span className="inline-flex items-center gap-1 font-medium"><ClockIcon /> {new Date(item.reportedAt).toLocaleString()}</span>}
-            {item.reporter && <span className="inline-flex items-center gap-1 font-medium truncate"><UserIcon /> {item.reporter.email || [item.reporter.firstName, item.reporter.lastName].filter(Boolean).join(' ') || '—'}</span>}
+            {item.reporter && <span className="inline-flex items-center gap-1 font-medium truncate"><UserIcon /> <strong className='font-semibold'>Finder:</strong> {item.reporter.email || [item.reporter.firstName, item.reporter.lastName].filter(Boolean).join(' ') || '—'}</span>}
           </div>
           {item.type === 'found' && qr && (
             <div className="mt-2 inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1">
@@ -382,9 +383,57 @@ function ItemRow({ item, qr, onOpen, onEdit, onMarkReturned, onQr }: { item: Adm
           {uis !== 'returned' && (
             <button onClick={onMarkReturned} className="inline-flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold bg-gradient-to-r from-sky-600 to-cyan-600 hover:from-sky-700 hover:to-cyan-700 text-white"><ReturnIcon /> Returned</button>
           )}
+          <DeleteItemButton itemId={item.id} title={item.title} />
         </div>
       </div>
     </div>
+  )
+}
+
+function DeleteItemButton({ itemId, title }: { itemId: number; title: string }) {
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState(false)
+  const onDelete = async () => {
+    if (busy || done) return
+    const confirm = window.confirm(`Delete this item?\n\n${title}\n\nThis action cannot be undone.`)
+    if (!confirm) return
+    try {
+      setBusy(true)
+      await adminDeleteItem(itemId)
+      setDone(true)
+      // Simple reload for now to refresh lists; could optimize by state removal
+      setTimeout(() => window.location.reload(), 500)
+    } catch (e) {
+      alert((e as Error).message || 'Failed to delete item')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <button
+      onClick={onDelete}
+      disabled={busy || done}
+      className={`inline-flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold border-2 ${done ? 'border-rose-300 bg-rose-50 text-rose-500' : 'border-rose-200 bg-white text-rose-600 hover:bg-rose-50'} ${busy ? 'opacity-60 cursor-wait' : ''}`}
+      title={done ? 'Deleted' : 'Delete item'}
+    >
+      {busy ? <SpinnerIcon /> : <TrashIcon />}{done ? 'Deleted' : 'Delete'}
+    </button>
+  )
+}
+
+function TrashIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} {...props}>
+      <path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M6 6l1 14c.1 1 1 2 2 2h6c1 0 1.9-1 2-2l1-14"/>
+    </svg>
+  )
+}
+function SpinnerIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg className="size-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} {...props}>
+      <circle cx="12" cy="12" r="10" className="opacity-25" />
+      <path d="M22 12a10 10 0 0 1-10 10" />
+    </svg>
   )
 }
 
@@ -475,9 +524,17 @@ type ItemUnion = Partial<{
   reportedAt: string | null
   photoUrl: string | null
   photoThumbUrl: string | null
+  reporter: { firstName?: string | null; lastName?: string | null; email?: string | null } | null
 }>
 
 function mapItemLike(it?: ItemUnion | null): ItemLike {
+  // Reporter object (if present) may include firstName/lastName/email
+  const reporter = it?.reporter || undefined
+  let finderName: string | null | undefined = undefined
+  if (reporter) {
+    const full = [reporter.firstName?.trim(), reporter.lastName?.trim()].filter(Boolean).join(' ').trim()
+    finderName = full || reporter.email || null
+  }
   return {
     id: Number(it?.id ?? 0),
     title: it?.title || `Item #${it?.id}`,
@@ -489,6 +546,7 @@ function mapItemLike(it?: ItemUnion | null): ItemLike {
     reportedAt: it?.reportedAt ?? undefined,
     photoUrl: it?.photoUrl ?? undefined,
     photoThumbUrl: it?.photoThumbUrl ?? undefined,
+    finderName,
   }
 }
 
