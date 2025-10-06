@@ -48,6 +48,21 @@ export default function ClaimStatusPage() {
 
   const index = steps.findIndex(s => s.key === uiStatus)
 
+  // Derive friendly item status label based on claim lifecycle to avoid showing "Claimed" prematurely
+  const displayItemStatus = useMemo(() => {
+    const raw = claim?.item?.status ? String(claim.item.status).toLowerCase() : ''
+    if (!raw) return '—'
+    // If backend flags item as claimed/claim_pending while this claim still under review
+    if (['claimed', 'claim_pending'].includes(raw)) {
+      if (uiStatus === 'pending') return 'Claim Pending'
+      if (uiStatus === 'approved') return 'Claim Approved'
+      if (uiStatus === 'returned') return 'Returned'
+      if (uiStatus === 'rejected') return 'Claim Rejected'
+    }
+    if (raw === 'closed' && uiStatus === 'returned') return 'Returned'
+    return capitalize(claim!.item!.status || raw)
+  }, [claim, uiStatus])
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 text-slate-900">
       <div className="sticky top-0 z-40 backdrop-blur-md bg-white/80 border-b border-black/5">
@@ -87,7 +102,11 @@ export default function ClaimStatusPage() {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
                 <div className="absolute top-3 left-3 flex flex-wrap gap-2">
                   <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${badge(uiStatus)}`}>{capitalize(uiStatus)}</span>
-                  {claim.item?.status && (<span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-black/40 text-white backdrop-blur-sm">Item: {capitalize(claim.item.status)}</span>)}
+                  {claim.item?.status && (
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-black/40 text-white backdrop-blur-sm">
+                      Item: {displayItemStatus}
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="flex-1 space-y-4">
@@ -99,7 +118,7 @@ export default function ClaimStatusPage() {
                   <Info label="Requested" value={formatDateTime(claim.createdAt)} />
                   <Info label="Approved" value={formatDateTime(claim.approvedAt) || '—'} />
                   <Info label="Match Score" value={typeof claim.matchScore === 'number' ? Math.round(claim.matchScore) + '%' : '—'} />
-                  <Info label="Item Status" value={capitalize(claim.item?.status || '—')} />
+                  <Info label="Item Status" value={displayItemStatus} />
                 </div>
                 <Progress steps={steps} currentIndex={index < 0 ? 0 : index} finalStatus={uiStatus} />
               </div>
