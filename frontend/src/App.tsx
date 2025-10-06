@@ -5,7 +5,10 @@ import { useAuth } from './lib/useAuth'
 import { getUserNotifications, markNotificationRead, subscribeNotifications, type NotificationDto } from './lib/api'
 
 type NotificationPayload = {
-  kind?: 'match' | string
+  kind?: 'match' | 'claim' | string
+  action?: string
+  itemId?: number
+  claimId?: number
   lostItemId?: number
   foundItemId?: number
   score?: number
@@ -93,9 +96,14 @@ function AppLayout() {
     // Mark read optimistically for any click
     setNotifications(prev => prev.map(x => x.id === n.id ? { ...x, read: true } : x))
     if (user) { markNotificationRead(n.id, user.id).catch(() => {}) }
-    // If notification payload indicates a match, route to dashboard and focus recommendations
+    // Redirect based on notification type (claim tracker or match recommendations)
     try {
       const p = (n as unknown as { payload?: NotificationPayload }).payload
+      if (p && p.kind === 'claim' && typeof p.claimId === 'number') {
+        setNotifOpen(false)
+        navigate('/my-claims', { state: { focusClaimId: p.claimId } })
+        return
+      }
       if (p && (p.kind === 'match' || (typeof p.lostItemId === 'number' && typeof p.foundItemId === 'number'))) {
         setNotifOpen(false)
         navigate('/dashboard')
@@ -155,6 +163,9 @@ function AppLayout() {
               <NavLink to="/my-reports" className={({isActive}: { isActive: boolean }) => `relative px-3 py-1.5 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>
                 My Reports
               </NavLink>
+              <NavLink to="/my-claims" className={({isActive}: { isActive: boolean }) => `relative px-3 py-1.5 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>
+                My Claims
+              </NavLink>
               {/* Notifications bell */}
               <div className="relative ml-1" ref={notifRef}>
                 <button
@@ -190,9 +201,12 @@ function AppLayout() {
                       ) : notifications.map(n => {
                         const payload = (n as unknown as { payload?: NotificationPayload }).payload
                         const isMatch = !!payload && (payload.kind === 'match' || (payload.lostItemId && payload.foundItemId))
+                        const isClaim = !!payload && payload.kind === 'claim'
                         const score = payload && typeof payload.score === 'number' ? Math.round(payload.score) : undefined
-                        const tagText = isMatch ? (payload?.category ? `${payload.category} Match` : 'Potential Match') : (n.type || 'Notice')
-                        const subtitle = isMatch
+                        const tagText = isClaim ? 'Claim Update' : isMatch ? (payload?.category ? `${payload.category} Match` : 'Potential Match') : (n.type || 'Notice')
+                        const subtitle = isClaim
+                          ? (n.message || '')
+                          : isMatch
                           ? `${payload?.candidate?.title ?? 'Item'}${payload?.candidate?.location ? ' • ' + payload.candidate.location : ''}${typeof score === 'number' ? ' • ' + score + '% match' : ''}`
                           : (n.message || '')
                         return (
@@ -202,7 +216,7 @@ function AppLayout() {
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-center gap-2">
                                   <div className="text-sm font-medium text-[var(--ink)] truncate" title={n.title}>{n.title}</div>
-                                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${isMatch ? 'bg-[color:var(--brand)]/10 text-[color:var(--brand)] ring-1 ring-[color:var(--brand)]/20' : 'bg-black/5 text-[var(--ink-700)]'}`}>{tagText}</span>
+                                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${isClaim ? 'bg-[color:var(--accent)]/10 text-[color:var(--accent)] ring-1 ring-[color:var(--accent)]/20' : isMatch ? 'bg-[color:var(--brand)]/10 text-[color:var(--brand)] ring-1 ring-[color:var(--brand)]/20' : 'bg-black/5 text-[var(--ink-700)]'}`}>{tagText}</span>
                                 </div>
                                 {subtitle && <div className="text-xs text-[var(--ink-700)] truncate" title={subtitle}>{subtitle}</div>}
                                 <div className="mt-0.5 text-[10px] text-[var(--ink-500)]">{new Date(n.createdAt).toLocaleString()}</div>
@@ -258,7 +272,15 @@ function AppLayout() {
                     </NavLink>
                     <button
                       role="menuitem"
-                      onClick={() => { setProfileOpen(false); logout() }}
+                      onClick={() => {
+                        // Capture role before clearing so we know where to send them
+                        const role = user?.role
+                        setProfileOpen(false)
+                        logout()
+                        // Redirect students to public landing page; admins to admin login
+                        if (role === 'student') navigate('/')
+                        else if (role === 'admin') navigate('/admin/login')
+                      }}
                       className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-black/5"
                     >
                       <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden>
@@ -307,8 +329,9 @@ function AppLayout() {
                 <NavLink to="/report/found" onClick={() => setOpen(false)} className={({isActive}: { isActive: boolean }) => `px-3 py-2 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>Report Found</NavLink>
                 <NavLink to="/search" onClick={() => setOpen(false)} className={({isActive}: { isActive: boolean }) => `px-3 py-2 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>Search Items</NavLink>
                 <NavLink to="/my-reports" onClick={() => setOpen(false)} className={({isActive}: { isActive: boolean }) => `px-3 py-2 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>My Reports</NavLink>
+                <NavLink to="/my-claims" onClick={() => setOpen(false)} className={({isActive}: { isActive: boolean }) => `px-3 py-2 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>My Claims</NavLink>
                 <NavLink to="/settings" onClick={() => setOpen(false)} className={({isActive}: { isActive: boolean }) => `px-3 py-2 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>Profile/Settings</NavLink>
-                <button onClick={() => { logout(); setOpen(false) }} className="mt-1 px-3 py-2 rounded-md transition-colors ring-1 bg-white text-[color:var(--brand)] hover:bg-[color:var(--brand)]/10 ring-[color:var(--brand)]/30 text-left">Logout</button>
+                <button onClick={() => { const role = user?.role; logout(); setOpen(false); if (role === 'student') navigate('/'); else if (role === 'admin') navigate('/admin/login') }} className="mt-1 px-3 py-2 rounded-md transition-colors ring-1 bg-white text-[color:var(--brand)] hover:bg-[color:var(--brand)]/10 ring-[color:var(--brand)]/30 text-left">Logout</button>
               </>
             ) : (
               <>
