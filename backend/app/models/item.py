@@ -1,4 +1,5 @@
-from sqlalchemy import func, Index
+from sqlalchemy import func, Index, literal_column
+from sqlalchemy.dialects.postgresql import REGCONFIG
 from ..extensions import db
 from .enums import item_type_enum, item_status_enum
 
@@ -42,11 +43,12 @@ class Item(db.Model):
         Index("idx_items_location", "location"),
         Index("idx_items_occurred_on", "occurred_on"),
         Index("idx_items_reported_at", "reported_at"),
+        # Full-text search index over title + description using English dictionary
         Index(
             "idx_items_search_tsv",
             func.to_tsvector(
-                "english",
-                func.coalesce(db.text("title"), "") + db.text(" ' ' ") + func.coalesce(db.text("description"), ""),
+                literal_column("'english'").cast(REGCONFIG),
+                func.coalesce(title, "") + " " + func.coalesce(description, ""),
             ),
             postgresql_using="gin",
         ),
