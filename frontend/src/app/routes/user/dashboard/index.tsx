@@ -363,7 +363,7 @@ export default function UserDashboard() {
             <ActionCard
               to="/search"
               title="Smart Search"
-              description={`${recs.length} AI-powered recommendations available`}
+              description={`${recs.length} suggested matches available`}
               color="blue"
               icon={<SearchIcon />}
               badge={recs.length > 0 ? `${recs.length}` : undefined}
@@ -447,18 +447,18 @@ export default function UserDashboard() {
             <section aria-labelledby="recommendations">
               <div className="mb-4">
                 <h2 id="recommendations" className="text-xl font-semibold text-[var(--ink)] mb-1 flex items-center gap-2">
-                  <span className="text-2xl">🤖</span>
-                  AI Recommendations
+                  <span className="text-2xl">🔍</span>
+                  Suggested Matches
                 </h2>
-                <p className="text-sm text-[var(--ink-600)]">Smart matches powered by machine learning</p>
+                <p className="text-sm text-[var(--ink-600)]">Potential matches based on item details</p>
               </div>
 
               <div className="bg-white/80 backdrop-blur-sm border border-black/10 rounded-2xl shadow-sm overflow-hidden">
         {recsLoading ? (
                   <div className="p-6 text-center">
-                    <div className="inline-flex items-center gap-3 text-sm text-[var(--ink-600)]">
+                      <div className="inline-flex items-center gap-3 text-sm text-[var(--ink-600)]">
                       <div className="size-5 rounded-full border-2 border-[color:var(--brand)] border-t-transparent animate-spin" />
-                      Analyzing your items for smart matches...
+                      Looking for potential matches...
                     </div>
                   </div>
                 ) : recs.length > 0 ? (
@@ -522,7 +522,7 @@ export default function UserDashboard() {
                   <EmptyState
                     icon={<RecommendationIcon />}
                     title="No matches yet"
-          description="Our System will automatically suggest potential matches when you report lost items. The more details you provide, the better our recommendations become."
+          description="The system will automatically suggest potential matches when you report lost items. The more details you provide, the better the suggestions become."
                     action={
                       <Link 
                         to="/report/lost" 
@@ -891,7 +891,7 @@ function RecommendationItem({
               <svg className="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
               </svg>
-              AI Recommended
+              Suggested
             </span>
             {item.location && (
               <span className="flex items-center gap-1 truncate max-w-[40%]">

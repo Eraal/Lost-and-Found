@@ -7,6 +7,7 @@ export type AuthUser = {
   firstName?: string
   lastName?: string
   avatarUrl?: string
+  token?: string
 }
 
 export type AuthContextType = {

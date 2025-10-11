@@ -1,5 +1,23 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000/api/v1'
 
+function currentToken(): string | null {
+  try {
+    const raw = localStorage.getItem('ccslf:user')
+    if (!raw) return null
+    const u = JSON.parse(raw)
+    if (u && typeof u === 'object' && typeof u.token === 'string' && u.token) return u.token
+    return null
+  } catch { return null }
+}
+
+function authHeaders(devUserId?: number): Record<string, string> {
+  const headers: Record<string, string> = {}
+  const t = currentToken()
+  if (t) headers['Authorization'] = `Bearer ${t}`
+  if (typeof devUserId === 'number' && !t) headers['X-User-Id'] = String(devUserId)
+  return headers
+}
+
 type ItemLite = {
   id: string | number
   name: string
@@ -71,7 +89,7 @@ export type NotificationDto = {
 export async function getUserNotifications(userId: number, limit = 10): Promise<NotificationDto[]> {
   try {
     const qs = new URLSearchParams({ userId: String(userId), limit: String(limit) })
-    const res = await fetch(`${API_BASE}/notifications?${qs.toString()}`)
+    const res = await fetch(`${API_BASE}/notifications?${qs.toString()}`, { headers: authHeaders(userId) })
     if (!res.ok) throw new Error('Failed')
     const data = await res.json().catch(() => ({})) as { notifications?: NotificationDto[] }
     return data.notifications ?? []
@@ -89,7 +107,7 @@ export async function getUserNotifications(userId: number, limit = 10): Promise<
 export async function markNotificationRead(notificationId: number, userId?: number): Promise<NotificationDto | null> {
   const qs = new URLSearchParams()
   if (typeof userId === 'number') qs.set('userId', String(userId))
-  const res = await fetch(`${API_BASE}/notifications/${notificationId}/read${qs.toString() ? `?${qs.toString()}` : ''}`, { method: 'PATCH' })
+  const res = await fetch(`${API_BASE}/notifications/${notificationId}/read${qs.toString() ? `?${qs.toString()}` : ''}`, { method: 'PATCH', headers: authHeaders(userId) })
   const data = await res.json().catch(() => ({})) as { notification?: NotificationDto }
   if (!res.ok) return null
   return data.notification ?? null
@@ -136,8 +154,7 @@ export async function createLostItem(input: CreateLostItemInput, reporterUserId?
   if (input.location) fd.set('location', input.location)
   if (input.occurredOn) fd.set('occurredOn', input.occurredOn)
   if (input.photoFile instanceof File) fd.set('photo', input.photoFile)
-  const headers: Record<string, string> = {}
-  if (typeof reporterUserId === 'number') headers['X-User-Id'] = String(reporterUserId)
+  const headers: Record<string, string> = authHeaders(reporterUserId)
   const res = await fetch(`${API_BASE}/items`, { method: 'POST', body: fd, headers })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
@@ -155,8 +172,7 @@ export async function createFoundItem(input: CreateFoundItemInput, reporterUserI
   if (input.location) fd.set('location', input.location)
   if (input.occurredOn) fd.set('occurredOn', input.occurredOn)
   if (input.photoFile instanceof File) fd.set('photo', input.photoFile)
-  const headers: Record<string, string> = {}
-  if (typeof reporterUserId === 'number') headers['X-User-Id'] = String(reporterUserId)
+  const headers: Record<string, string> = authHeaders(reporterUserId)
   const res = await fetch(`${API_BASE}/items`, { method: 'POST', body: fd, headers })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
@@ -171,7 +187,7 @@ export async function listItems(params?: { type?: 'lost' | 'found', reporterUser
   if (params?.type) qs.set('type', params.type)
   if (typeof params?.reporterUserId === 'number') qs.set('reporterUserId', String(params.reporterUserId))
   if (typeof params?.limit === 'number') qs.set('limit', String(params.limit))
-  const res = await fetch(`${API_BASE}/items${qs.toString() ? `?${qs.toString()}` : ''}`)
+  const res = await fetch(`${API_BASE}/items${qs.toString() ? `?${qs.toString()}` : ''}`, { headers: authHeaders(params?.reporterUserId) })
   const data = await res.json().catch(() => ({})) as { items?: ItemDto[], error?: string }
   if (!res.ok) {
     const msg = (data && data.error) || 'Failed to load items'
@@ -196,7 +212,7 @@ export async function adminListItems(params?: { q?: string; type?: 'lost' | 'fou
   if (params?.dateFrom) qs.set('dateFrom', params.dateFrom)
   if (params?.dateTo) qs.set('dateTo', params.dateTo)
   if (typeof params?.limit === 'number') qs.set('limit', String(params.limit))
-  const res = await fetch(`${API_BASE}/admin/items${qs.toString() ? `?${qs.toString()}` : ''}`)
+  const res = await fetch(`${API_BASE}/admin/items${qs.toString() ? `?${qs.toString()}` : ''}`, { headers: authHeaders() })
   const data = await res.json().catch(() => ({})) as { items?: AdminItem[]; error?: string }
   if (!res.ok) throw new Error((data && data.error) || 'Failed to load admin items')
   return data.items ?? []
@@ -206,7 +222,7 @@ export type UpdateAdminItemInput = Partial<{ title: string; description: string 
 export async function adminUpdateItem(itemId: number, payload: UpdateAdminItemInput): Promise<AdminItem> {
   const res = await fetch(`${API_BASE}/admin/items/${itemId}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(payload),
   })
   const data = await res.json().catch(() => ({})) as { item?: AdminItem; error?: string }
@@ -215,31 +231,29 @@ export async function adminUpdateItem(itemId: number, payload: UpdateAdminItemIn
 }
 
 export async function adminMarkReturned(itemId: number): Promise<AdminItem> {
-  const res = await fetch(`${API_BASE}/admin/items/${itemId}/return`, { method: 'POST' })
+  const res = await fetch(`${API_BASE}/admin/items/${itemId}/return`, { method: 'POST', headers: authHeaders() })
   const data = await res.json().catch(() => ({})) as { item?: AdminItem; error?: string }
   if (!res.ok) throw new Error((data && data.error) || 'Failed to mark returned')
   return (data.item as AdminItem)
 }
 
 export async function adminDeleteItem(itemId: number): Promise<{ deleted: boolean; id: number }> {
-  const res = await fetch(`${API_BASE}/admin/items/${itemId}`, { method: 'DELETE' })
+  const res = await fetch(`${API_BASE}/admin/items/${itemId}`, { method: 'DELETE', headers: authHeaders() })
   const data = await res.json().catch(() => ({})) as { deleted?: boolean; id?: number; error?: string }
   if (!res.ok || !data.deleted) throw new Error((data && data.error) || 'Failed to delete item')
   return { deleted: true, id: Number(data.id || itemId) }
 }
 
 // QR Codes
-export type QrCodeDto = { code: string; itemId?: number | null; scanCount?: number; lastScannedAt?: string | null; url?: string }
+export type QrCodeDto = { code: string; itemId?: number | null; scanCount?: number; lastScannedAt?: string | null; url?: string; canonicalUrl?: string }
 export async function getItemQrCode(itemId: number): Promise<QrCodeDto | null> {
-  const res = await fetch(`${API_BASE}/qrcodes/item/${itemId}`)
+  const res = await fetch(`${API_BASE}/qrcodes/item/${itemId}`, { headers: authHeaders() })
   const data = await res.json().catch(() => ({})) as { qrcode?: QrCodeDto | null; error?: string }
   if (!res.ok) return null
   return data.qrcode ?? null
 }
 export async function createItemQrCode(itemId: number, regenerate = false): Promise<QrCodeDto> {
-  const res = await fetch(`${API_BASE}/qrcodes/item/${itemId}`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ regenerate })
-  })
+  const res = await fetch(`${API_BASE}/qrcodes/item/${itemId}`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ regenerate }) })
   const data = await res.json().catch(() => ({})) as { qrcode?: QrCodeDto; error?: string }
   if (!res.ok) throw new Error((data && data.error) || 'Failed to create QR code')
   return (data.qrcode as QrCodeDto)
@@ -264,8 +278,7 @@ export async function autoReportFoundFromQr(code: string, params?: { reporterUse
   const body: Record<string, unknown> = {}
   // Reporter inferred via header now; legacy body field omitted unless older backend
   if (params?.location) body.location = params.location
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-  if (typeof params?.reporterUserId === 'number') headers['X-User-Id'] = String(params.reporterUserId)
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...authHeaders(params?.reporterUserId) }
   const res = await fetch(`${API_BASE}/qrcodes/${encodeURIComponent(code)}/auto-found`, { method: 'POST', headers, body: JSON.stringify(body) })
   const data = await res.json().catch(() => ({})) as AutoFoundResponse
   if (!res.ok) return data
@@ -302,6 +315,10 @@ export type ClaimDto = {
   user?: ClaimUserLite
   matchScore?: number
   adminNote?: string | null
+  returned?: boolean
+  returnClaimerUserId?: number | null
+  returnClaimerName?: string | null
+  returnOverride?: boolean | null
 }
 
 type ClaimRecord = {
@@ -315,6 +332,10 @@ type ClaimRecord = {
   item?: ClaimItemLite
   user?: ClaimUserLite
   adminNote?: string | null
+  returned?: boolean
+  returnClaimerUserId?: number | null
+  returnClaimerName?: string | null
+  returnOverride?: boolean | null
 }
 
 export async function requestClaim(itemId: number, claimantUserId: number, notes?: string): Promise<ClaimDto> {
@@ -328,7 +349,7 @@ export async function listClaims(params?: { claimantUserId?: number, itemId?: nu
   if (typeof params?.itemId === 'number') qs.set('itemId', String(params.itemId))
   if (params?.status) qs.set('status', params.status)
   if (typeof params?.limit === 'number') qs.set('limit', String(params.limit))
-  const res = await fetch(`${API_BASE}/claims${qs.toString() ? `?${qs.toString()}` : ''}`)
+  const res = await fetch(`${API_BASE}/claims${qs.toString() ? `?${qs.toString()}` : ''}`, { headers: authHeaders(params?.claimantUserId) })
   const data = await res.json().catch(() => ({})) as { claims?: ClaimRecord[], error?: string }
   if (!res.ok) {
     const msg = (data && data.error) || 'Failed to load claims'
@@ -345,6 +366,10 @@ export async function listClaims(params?: { claimantUserId?: number, itemId?: nu
   item: c.item,
   user: c.user,
   adminNote: c.adminNote ?? null,
+  returned: c.returned ?? false,
+  returnClaimerUserId: c.returnClaimerUserId ?? null,
+  returnClaimerName: c.returnClaimerName ?? null,
+  returnOverride: c.returnOverride ?? null,
   }))
 }
 
@@ -352,7 +377,7 @@ export async function listClaims(params?: { claimantUserId?: number, itemId?: nu
 export async function createClaim(itemId: number, claimantId: number, notes?: string): Promise<ClaimDto> {
   const res = await fetch(`${API_BASE}/claims`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders(claimantId) },
     body: JSON.stringify({ itemId, claimantId, notes }),
   })
   const data = await res.json().catch(() => ({})) as { claim?: ClaimRecord, error?: string }
@@ -371,6 +396,10 @@ export async function createClaim(itemId: number, claimantId: number, notes?: st
     item: c.item,
     user: c.user,
   adminNote: c.adminNote ?? null,
+  returned: c.returned ?? false,
+  returnClaimerUserId: c.returnClaimerUserId ?? null,
+  returnClaimerName: c.returnClaimerName ?? null,
+  returnOverride: c.returnOverride ?? null,
   }
 }
 
@@ -380,10 +409,12 @@ export async function updateClaimStatus(
   notes?: string,
   adminNotes?: string,
   adminId?: number,
+  currentUserId?: number,
 ): Promise<ClaimDto> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...authHeaders(currentUserId) }
   const res = await fetch(`${API_BASE}/claims/${claimId}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ status, notes, adminId, adminNotes }),
   })
   const data = await res.json().catch(() => ({})) as { claim?: ClaimRecord, error?: string }
@@ -400,11 +431,19 @@ export async function updateClaimStatus(
     item: c.item,
     user: c.user,
   adminNote: c.adminNote ?? null,
+  returned: c.returned ?? false,
+  returnClaimerUserId: c.returnClaimerUserId ?? null,
+  returnClaimerName: c.returnClaimerName ?? null,
+  returnOverride: c.returnOverride ?? null,
   }
 }
 
-export async function markClaimReturned(claimId: number): Promise<ClaimDto> {
-  const res = await fetch(`${API_BASE}/claims/${claimId}/return`, { method: 'POST' })
+export async function markClaimReturned(claimId: number, currentUserId?: number, override?: { claimerUserId?: number; claimerName?: string }): Promise<ClaimDto> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', ...authHeaders(currentUserId) }
+  const body: Record<string, unknown> = {}
+  if (override?.claimerUserId) body.claimerUserId = override.claimerUserId
+  if (override?.claimerName) body.claimerName = override.claimerName
+  const res = await fetch(`${API_BASE}/claims/${claimId}/return`, { method: 'POST', headers, body: Object.keys(body).length ? JSON.stringify(body) : undefined })
   const data = await res.json().catch(() => ({})) as { claim?: ClaimRecord, error?: string }
   if (!res.ok) throw new Error((data && data.error) || 'Failed to mark returned')
   const c = data.claim as ClaimRecord
@@ -423,7 +462,7 @@ export async function markClaimReturned(claimId: number): Promise<ClaimDto> {
 }
 
 export async function getClaim(claimId: number): Promise<ClaimDto | null> {
-  const res = await fetch(`${API_BASE}/claims/${claimId}`)
+  const res = await fetch(`${API_BASE}/claims/${claimId}`, { headers: authHeaders() })
   const data = await res.json().catch(() => ({})) as { claim?: ClaimRecord, error?: string }
   if (!res.ok) return null
   const c = data.claim as ClaimRecord | undefined
@@ -439,6 +478,10 @@ export async function getClaim(claimId: number): Promise<ClaimDto | null> {
     item: c.item,
     user: c.user,
     adminNote: c.adminNote ?? null,
+    returned: c.returned ?? false,
+    returnClaimerUserId: c.returnClaimerUserId ?? null,
+    returnClaimerName: c.returnClaimerName ?? null,
+    returnOverride: c.returnOverride ?? null,
   }
 }
 
@@ -456,6 +499,7 @@ export type UserLite = {
   id: number
   email: string
   role: 'student' | 'admin'
+  token?: string
   studentId?: string
   firstName?: string
   middleName?: string | null
@@ -502,7 +546,7 @@ export type CreateAdminInput = {
 export async function createAdmin(input: CreateAdminInput): Promise<UserLite> {
   const res = await fetch(`${API_BASE}/auth/register/admin`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(input),
   })
   const data = await res.json().catch(() => ({}))
@@ -670,16 +714,18 @@ export async function getAdminDailyStats(): Promise<AdminDailyStats> {
 }
 
 // Admin: Overview Totals
-export type AdminOverviewStats = { lost: number; found: number; claimed: number; pending: number }
+export type AdminOverviewStats = { lost: number; found: number; claimed: number; returned: number; pending: number }
 export async function getAdminOverviewStats(): Promise<AdminOverviewStats> {
   const res = await fetch(`${API_BASE}/admin/stats/overview`)
   const data = await res.json().catch(() => ({})) as Partial<AdminOverviewStats> & { error?: string }
-  if (!res.ok) return { lost: 0, found: 0, claimed: 0, pending: 0 }
+  if (!res.ok) return { lost: 0, found: 0, claimed: 0, returned: 0, pending: 0 }
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v)) ? v : Number(v) || 0
   return {
-    lost: Number.isFinite(Number(data.lost)) ? Number(data.lost) : 0,
-    found: Number.isFinite(Number(data.found)) ? Number(data.found) : 0,
-    claimed: Number.isFinite(Number(data.claimed)) ? Number(data.claimed) : 0,
-    pending: Number.isFinite(Number(data.pending)) ? Number(data.pending) : 0,
+    lost: num(data.lost),
+    found: num(data.found),
+    claimed: num(data.claimed),
+    returned: num(data.returned),
+    pending: num(data.pending),
   }
 }
 

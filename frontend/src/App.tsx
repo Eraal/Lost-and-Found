@@ -107,7 +107,7 @@ function AppLayout() {
       if (p && (p.kind === 'match' || (typeof p.lostItemId === 'number' && typeof p.foundItemId === 'number'))) {
         setNotifOpen(false)
         navigate('/dashboard')
-        // Small delay to allow dashboard render, then scroll to AI Recommendations section
+  // Small delay to allow dashboard render, then scroll to Suggested Matches section
         setTimeout(() => {
           const el = document.querySelector('#recommendations') as HTMLElement | null
           if (el) {
@@ -305,9 +305,6 @@ function AppLayout() {
               <NavLink to="/how-it-works" className={({isActive}: { isActive: boolean }) => `relative px-3 py-1.5 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>
                 How It Works
               </NavLink>
-              <NavLink to="/contact" className={({isActive}: { isActive: boolean }) => `relative px-3 py-1.5 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>
-                Contact
-              </NavLink>
               {/* CTA: Login & Register */}
               <NavLink to="/login" className={({isActive}: { isActive: boolean }) => `ml-2 relative inline-flex items-center px-3 py-1.5 rounded-md font-medium transition-colors ring-1 ${isActive ? 'bg-[color:var(--brand)] text-white ring-[color:var(--accent)]/40' : 'bg-[color:var(--brand)] text-white hover:bg-[color:var(--brand-strong)] ring-[color:var(--accent)]/40'} shadow-sm`}>
                 Login & Register
@@ -338,7 +335,6 @@ function AppLayout() {
                 <NavLink to="/" end onClick={() => setOpen(false)} className={({isActive}: { isActive: boolean }) => `px-3 py-2 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>Home</NavLink>
                 <NavLink to="/search" onClick={() => setOpen(false)} className={({isActive}: { isActive: boolean }) => `px-3 py-2 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>Browse Unclaimed Items</NavLink>
                 <NavLink to="/how-it-works" onClick={() => setOpen(false)} className={({isActive}: { isActive: boolean }) => `px-3 py-2 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>How It Works</NavLink>
-                <NavLink to="/contact" onClick={() => setOpen(false)} className={({isActive}: { isActive: boolean }) => `px-3 py-2 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>Contact</NavLink>
                 <NavLink to="/login" onClick={() => setOpen(false)} className={({isActive}: { isActive: boolean }) => `mt-1 px-3 py-2 rounded-md transition-colors ring-1 ${isActive ? 'bg-[color:var(--brand)] text-white ring-[color:var(--accent)]/40' : 'bg-[color:var(--brand)] text-white hover:bg-[color:var(--brand-strong)] ring-[color:var(--accent)]/40'}`}>Login & Register</NavLink>
               </>
             )}

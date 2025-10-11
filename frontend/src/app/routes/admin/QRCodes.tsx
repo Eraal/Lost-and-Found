@@ -9,6 +9,8 @@ export default function AdminQRCodes() {
   const [qr, setQr] = useState<QrCodeDto | null>(null)
   const [busy, setBusy] = useState(false)
   const [q, setQ] = useState('')
+  const [qrBusyId, setQrBusyId] = useState<number | null>(null)
+  const [showPreview, setShowPreview] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -37,28 +39,35 @@ export default function AdminQRCodes() {
     ))
   }, [q, found])
 
+  const stats = useMemo(() => {
+    const total = found.length
+    const withPhoto = found.filter(f => f.photoUrl || f.photoThumbUrl).length
+    const today = found.filter(f => f.reportedAt && isToday(f.reportedAt)).length
+    return { total, withPhoto, today }
+  }, [found])
+
   async function ensureQr(it: AdminItem, regen = false) {
+    if (qrBusyId) return
     setBusy(true)
+    setQrBusyId(it.id)
     try {
       const existing = await getItemQrCode(it.id)
-      if (existing && !regen) {
-        setQr(existing)
-      } else {
-        const created = await createItemQrCode(it.id, regen)
-        setQr(created)
-      }
+      const data = existing && !regen ? existing : await createItemQrCode(it.id, regen)
+      setQr(data)
       setSelected(it)
+      setShowPreview(true)
     } catch (e) {
       alert((e as Error)?.message || 'Failed to generate QR')
     } finally {
       setBusy(false)
+      setQrBusyId(null)
     }
   }
 
   function onPrint() {
     if (!qr || !selected) return
     const imageUrl = `${import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000/api/v1'}/qrcodes/${qr.code}/image?size=8`
-    const scanUrl = qr.url || `${import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000/api/v1'}/qrcodes/${qr.code}/item`
+  const scanUrl = qr.canonicalUrl || qr.url || `${import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000/api/v1'}/qrcodes/${qr.code}/item`
     const itemImg = selected.photoUrl || selected.photoThumbUrl || ''
     const publicPage = ((import.meta.env.VITE_PUBLIC_BASE_URL as string | undefined) || (typeof window !== 'undefined' ? window.location.origin : '')).replace(/\/$/, '') + `/scan/${qr.code}`
     const w = window.open('', '_blank', 'width=800,height=600')
@@ -113,74 +122,69 @@ export default function AdminQRCodes() {
   }
 
   return (
-    <div className="p-6">
-      <div className="max-w-7xl mx-auto">
-        <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">QR Codes for Found Items</h1>
-            <p className="text-sm text-gray-600">Generate and print QR codes that link to item details.</p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50/30 p-6">
+      <div className="max-w-7xl mx-auto space-y-8">
+        {/* Header */}
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          <div className="flex items-start gap-4">
+            <div className="p-3 rounded-2xl bg-gradient-to-br from-indigo-600 to-blue-600 text-white shadow-lg">
+              <QrIcon />
+            </div>
+            <div>
+              <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-indigo-600 to-blue-600 bg-clip-text text-transparent">QR Codes • Found Items</h1>
+              <p className="mt-1 text-sm text-slate-600">Generate, manage and print QR codes for rapid identification & claim routing.</p>
+              <div className="mt-3 flex flex-wrap gap-2 text-[11px] font-medium">
+                <Badge color="indigo">Total: {stats.total}</Badge>
+                <Badge color="sky">With Photo: {stats.withPhoto}</Badge>
+                <Badge color="emerald">Today: {stats.today}</Badge>
+              </div>
+            </div>
           </div>
           {selected && qr && (
-            <div className="inline-flex items-center gap-2">
-              <button onClick={() => ensureQr(selected, true)} disabled={busy} className="rounded-lg px-3 py-2 text-sm font-semibold bg-white border border-gray-200 hover:bg-gray-50">Regenerate</button>
-              <button onClick={onPrint} className="rounded-lg px-3 py-2 text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700">Print</button>
+            <div className="inline-flex flex-wrap gap-2">
+              <button onClick={() => ensureQr(selected, true)} disabled={busy} className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold bg-white border-2 border-gray-200 text-gray-800 hover:bg-gray-50 disabled:opacity-50"><RefreshIcon /> Regenerate</button>
+              <button onClick={onPrint} className="inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold bg-gradient-to-r from-indigo-600 to-blue-600 text-white shadow hover:from-indigo-700 hover:to-blue-700"><PrintIcon /> Print</button>
             </div>
           )}
         </div>
 
-        <div className="mb-4">
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search found items…" className="w-full max-w-md rounded-lg border-2 border-gray-200 bg-white px-3 py-2.5 text-sm" />
+        {/* Search & Hints */}
+        <div className="flex flex-col lg:flex-row lg:items-end gap-6">
+          <div className="flex-1">
+            <label className="block text-xs font-semibold text-slate-700">Search Items</label>
+            <div className="mt-1 relative">
+              <input value={q} onChange={e => setQ(e.target.value)} placeholder="Search by title, location, or ID…" className="w-full rounded-xl border-2 border-slate-200 bg-white px-4 py-2.5 text-sm focus:border-indigo-300 outline-none shadow-sm" />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"><SearchIcon /></span>
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white/70 backdrop-blur p-4 text-[11px] text-slate-600 shadow-sm flex-1">
+            <p className="font-semibold mb-1 text-slate-700">Tips</p>
+            <ul className="list-disc pl-4 space-y-0.5">
+              <li>Click Generate to open QR preview modal</li>
+              <li>Regenerate only if code was compromised</li>
+              <li>Print includes item photo & metadata</li>
+            </ul>
+          </div>
         </div>
 
+        {/* Content */}
         {error ? (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700 text-sm">{error}</div>
+          <div className="rounded-2xl border-2 border-rose-200 bg-rose-50/60 p-6 text-rose-700 text-sm">{error}</div>
         ) : loading ? (
-          <div className="text-sm text-gray-600">Loading…</div>
+          <CardSkeleton rows={9} />
+        ) : filtered.length === 0 ? (
+          <div className="p-16 text-center text-sm text-slate-600 rounded-2xl border-2 border-dashed border-slate-200 bg-white/50">No found items match your search.</div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filtered.map(it => (
-              <div key={it.id} className="rounded-xl border-2 border-gray-200 bg-white p-4 flex gap-4">
-                <div className="size-20 rounded-lg bg-gray-100 grid place-items-center overflow-hidden">
-                  {it.photoThumbUrl || it.photoUrl ? (
-                    <img src={it.photoThumbUrl || it.photoUrl || ''} alt="" className="object-cover w-full h-full" />
-                  ) : (
-                    <span className="text-gray-400">📦</span>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold truncate" title={it.title}>{it.title}</div>
-                  <div className="text-xs text-gray-600 truncate">{it.location || '—'}</div>
-                  <div className="mt-2 inline-flex items-center gap-2">
-                    <button disabled={busy} onClick={() => ensureQr(it)} className="rounded-lg px-2.5 py-1.5 text-xs font-semibold bg-indigo-600 text-white hover:bg-indigo-700">Generate QR</button>
-                  </div>
-                </div>
-              </div>
+              <ItemCard key={it.id} item={it} busy={qrBusyId === it.id} onGenerate={() => ensureQr(it)} />
             ))}
           </div>
         )}
 
-        {selected && qr && (
-          <div className="mt-8 rounded-xl border border-gray-200 bg-white p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <div className="text-sm font-semibold">Preview</div>
-                <div className="text-xs text-gray-600">Code: {qr.code} • Scans: {qr.scanCount ?? 0}</div>
-              </div>
-              <div className="inline-flex items-center gap-2">
-                <button onClick={() => ensureQr(selected, true)} disabled={busy} className="rounded-lg px-3 py-2 text-sm font-semibold bg-white border border-gray-200 hover:bg-gray-50">Regenerate</button>
-                <button onClick={onPrint} className="rounded-lg px-3 py-2 text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700">Print</button>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <img src={`${import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000/api/v1'}/qrcodes/${qr.code}/image?size=8`} alt="QR Code" className="w-48 h-48 rounded-lg border border-gray-200" />
-              <div className="text-sm text-gray-700">
-                <div className="font-medium">Found Item #{selected.id}</div>
-                <div className="text-gray-600">{selected.title}</div>
-                <div className="text-xs text-gray-500 mt-2">Scan to view details and claim instructions.</div>
-                <a href={qr.url || '#'} target="_blank" className="text-xs text-indigo-600 underline break-all">{qr.url}</a>
-              </div>
-            </div>
-          </div>
+        {/* QR Preview Modal */}
+        {showPreview && selected && qr && (
+          <QrModal item={selected} qr={qr} busy={busy} onClose={() => setShowPreview(false)} onRegenerate={() => ensureQr(selected, true)} onPrint={onPrint} />
         )}
       </div>
     </div>
@@ -190,3 +194,139 @@ export default function AdminQRCodes() {
 function escapeHtml(s: string) {
   return s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
 }
+
+/* -------------------------------------------------------------------------- */
+/*  UI Subcomponents                                                          */
+/* -------------------------------------------------------------------------- */
+
+function ItemCard({ item, onGenerate, busy }: { item: AdminItem; onGenerate: () => void; busy?: boolean }) {
+  const isNew = item.reportedAt ? (Date.now() - Date.parse(item.reportedAt)) < 48 * 36e5 : false
+  return (
+    <div className="group relative rounded-2xl border-2 border-slate-200 bg-white p-4 flex gap-4 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all">
+      <div className="size-20 rounded-xl bg-gradient-to-br from-slate-100 to-slate-200 grid place-items-center overflow-hidden ring-1 ring-slate-300/50">
+        {item.photoThumbUrl || item.photoUrl ? (
+          <img src={item.photoThumbUrl || item.photoUrl || ''} alt="" className="object-cover w-full h-full" />
+        ) : (
+          <span className="text-slate-400 text-xl">📦</span>
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="text-sm font-semibold truncate max-w-[180px]" title={item.title}>{item.title}</div>
+          {isNew && <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-pink-500 to-rose-500 text-white text-[10px] font-semibold shadow">NEW</span>}
+        </div>
+        <div className="mt-0.5 text-xs text-slate-600 truncate flex items-center gap-1">
+          <MapPinIcon className="size-3.5" /> {item.location || '—'}
+        </div>
+        {item.reportedAt && (
+          <div className="mt-0.5 text-[11px] text-slate-500">Reported {relativeTime(item.reportedAt)}</div>
+        )}
+        <div className="mt-3 inline-flex items-center gap-2">
+          <button disabled={busy} onClick={onGenerate} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold shadow-sm border-2 transition-colors ${busy ? 'border-slate-300 bg-slate-100 text-slate-500 cursor-not-allowed' : 'border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:border-indigo-400'}`}>
+            {busy ? <SpinnerIcon /> : <QrIcon />} {busy ? 'Working…' : 'Generate QR'}
+          </button>
+          {item.description && <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">Desc</span>}
+        </div>
+      </div>
+      <div className="pointer-events-none absolute -inset-px rounded-[inherit] opacity-0 group-hover:opacity-100 transition-opacity bg-[radial-gradient(circle_at_30%_20%,rgba(99,102,241,.18),transparent_60%)]" />
+    </div>
+  )
+}
+
+function QrModal({ item, qr, onClose, onRegenerate, onPrint, busy }: { item: AdminItem; qr: QrCodeDto; onClose: () => void; onRegenerate: () => void; onPrint: () => void; busy?: boolean }) {
+  const apiBase = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000/api/v1'
+  const img = `${apiBase}/qrcodes/${qr.code}/image?size=8`
+  const scanUrl = qr.canonicalUrl || qr.url || `${apiBase}/qrcodes/${qr.code}/item`
+  const download = () => { const a = document.createElement('a'); a.href = img; a.download = `item-${item.id}-qr.png`; document.body.appendChild(a); a.click(); a.remove() }
+  const copy = async () => { try { await navigator.clipboard?.writeText(scanUrl); } catch {/* ignore */} }
+  return (
+    <div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
+      <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute left-1/2 top-1/2 w-[min(820px,94vw)] -translate-x-1/2 -translate-y-1/2 rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-gradient-to-r from-indigo-600/5 to-blue-600/5">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-xl bg-indigo-600 text-white shadow"><QrIcon /></div>
+            <div className="text-[15px] font-semibold text-slate-900">QR Code • Found Item #{item.id}</div>
+          </div>
+          <button onClick={onClose} className="size-9 inline-grid place-items-center rounded-lg hover:bg-black/5"><XIcon /></button>
+        </div>
+        <div className="p-6 flex flex-col md:flex-row gap-8">
+          <div className="relative flex flex-col items-center">
+            <div className="relative p-5 rounded-2xl bg-white shadow-inner ring-1 ring-slate-200">
+              <img src={img} alt="QR" className="w-60 h-60 rounded-xl border border-slate-200" />
+              {typeof qr.scanCount === 'number' && <div className="absolute -top-2 -right-2 rounded-full bg-indigo-600 text-white text-[10px] font-semibold px-2 py-1 shadow">{qr.scanCount} scan{qr.scanCount === 1 ? '' : 's'}</div>}
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-slate-600">
+              {qr.lastScannedAt && <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1"><ClockIcon /> Last {relativeTime(qr.lastScannedAt)}</span>}
+              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1">Code: <code className="font-mono">{qr.code}</code></span>
+            </div>
+          </div>
+          <div className="flex-1 min-w-0 text-sm text-slate-800">
+            <div className="font-semibold text-lg truncate" title={item.title}>{item.title}</div>
+            <div className="text-xs text-slate-600 truncate flex items-center gap-1 mt-0.5"><MapPinIcon className="size-3.5" /> {item.location || '—'}</div>
+            {item.description && (
+              <div className="mt-4 space-y-2">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Description</div>
+                <p className="text-xs leading-relaxed text-slate-700 whitespace-pre-wrap bg-slate-50 rounded-lg p-3 border border-slate-100 max-h-40 overflow-auto">{item.description}</p>
+              </div>
+            )}
+            <div className="mt-5 space-y-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Scan Link</div>
+              <div className="text-xs break-all rounded-lg bg-slate-50 border border-slate-200 p-2 font-mono">
+                <a href={scanUrl} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline">{scanUrl}</a>
+              </div>
+            </div>
+            <div className="mt-6 flex flex-wrap items-center gap-2">
+              <button onClick={onRegenerate} disabled={busy} className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-50"><RefreshIcon /> Regenerate</button>
+              <button onClick={onPrint} className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700"><PrintIcon /> Print</button>
+              <button onClick={download} className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold bg-white border border-slate-300 hover:bg-slate-50"><DownloadIcon /> PNG</button>
+              <button onClick={copy} className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold bg-white border border-slate-300 hover:bg-slate-50"><LinkIcon /> Copy Link</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function Badge({ children, color }: { children: React.ReactNode; color: 'indigo' | 'sky' | 'emerald' }) {
+  const map: Record<string, string> = {
+    indigo: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    sky: 'bg-sky-50 text-sky-700 border-sky-200',
+    emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200'
+  }
+  return <span className={`inline-flex items-center px-2.5 py-1 rounded-full border text-[10px] font-semibold ${map[color]}`}>{children}</span>
+}
+
+function CardSkeleton({ rows = 6 }: { rows?: number }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="rounded-2xl border-2 border-slate-200 bg-white p-4 flex gap-4 animate-pulse">
+          <div className="size-20 rounded-xl bg-slate-200" />
+          <div className="flex-1 space-y-3">
+            <div className="h-4 w-2/3 rounded bg-slate-200" />
+            <div className="h-3 w-1/2 rounded bg-slate-100" />
+            <div className="h-8 w-24 rounded bg-slate-100" />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/* Utilities */
+function isToday(d: string) { const dt = new Date(d); const now = new Date(); return dt.getDate() === now.getDate() && dt.getMonth() === now.getMonth() && dt.getFullYear() === now.getFullYear() }
+function relativeTime(date: string | number | Date): string { const d = new Date(date); const diffMs = Date.now() - d.getTime(); const abs = Math.abs(diffMs); const sec = Math.round(abs/1000); const min = Math.round(sec/60); const hr = Math.round(min/60); const day = Math.round(hr/24); const fmt = (n:number,w:string)=>`${n} ${w}${n!==1?'s':''}`; let value: string; if (sec<45) value=fmt(sec,'second'); else if (min<45) value=fmt(min,'minute'); else if (hr<24) value=fmt(hr,'hour'); else if (day<30) value=fmt(day,'day'); else return d.toLocaleDateString(); return diffMs>=0?`${value} ago`:`in ${value}` }
+
+/* Icons reused from Items page (assumed globally available styles) */
+function QrIcon(props: React.SVGProps<SVGSVGElement>) { return (<svg className="size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} {...props}><path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h3v3h-3zM20 20h-3v-3" /></svg>) }
+function RefreshIcon(props: React.SVGProps<SVGSVGElement>) { return (<svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} {...props}><path d="M3 3v6h6" /><path d="M21 21v-6h-6" /><path d="M21 12A9 9 0 0 0 6.3 5.3L3 9" /><path d="M3 12a9 9 0 0 0 14.7 6.7L21 15" /></svg>) }
+function PrintIcon(props: React.SVGProps<SVGSVGElement>) { return (<svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} {...props}><path d="M6 9V3h12v6" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><path d="M6 14h12v8H6z" /></svg>) }
+function DownloadIcon(props: React.SVGProps<SVGSVGElement>) { return (<svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} {...props}><path d="M12 3v14" /><path d="M6 13l6 6 6-6" /><path d="M5 21h14" /></svg>) }
+function LinkIcon(props: React.SVGProps<SVGSVGElement>) { return (<svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} {...props}><path d="M10 13a5 5 0 0 0 7.54.54l2-2a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-2 2a5 5 0 0 0 7.07 7.07l1.72-1.71" /></svg>) }
+function XIcon(props: React.SVGProps<SVGSVGElement>) { return (<svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} {...props}><path d="M18 6 6 18M6 6l12 12" /></svg>) }
+function MapPinIcon(props: React.SVGProps<SVGSVGElement>) { return (<svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} {...props}><path d="M12 21s-6-4.35-6-10a6 6 0 1 1 12 0c0 5.65-6 10-6 10Z"/><circle cx="12" cy="11" r="2.5"/></svg>) }
+function ClockIcon(props: React.SVGProps<SVGSVGElement>) { return (<svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} {...props}><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>) }
+function SpinnerIcon(props: React.SVGProps<SVGSVGElement>) { return (<svg className="size-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} {...props}><circle cx="12" cy="12" r="10" className="opacity-25" /><path d="M22 12a10 10 0 0 1-10 10" /></svg>) }
+function SearchIcon(props: React.SVGProps<SVGSVGElement>) { return (<svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} {...props}><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" /></svg>) }

@@ -1,10 +1,12 @@
-from flask import request, jsonify
+import os
+from flask import request, jsonify, g
 from sqlalchemy import func
 from werkzeug.security import generate_password_hash, check_password_hash
 
 from ...extensions import db
 from ...models.user import User
 from . import bp
+from ...security import issue_token
 
 
 def _json_error(message: str, status: int = 400):
@@ -109,6 +111,18 @@ def register_admin():
     if existing_email:
         return _json_error("Email already in use", 409)
 
+    # Authorization: require existing admin (via g.current_user) OR a valid one-time invite code from env
+    inviter = getattr(g, "current_user", None)
+    invite_ok = False
+    try:
+        provided = (request.headers.get("X-Admin-Invite") or request.args.get("invite") or (data.get("invite") if isinstance(data, dict) else None) or "").strip()
+        expected = os.getenv("ADMIN_INVITE_CODE") or ""
+        invite_ok = bool(provided and expected and provided == expected)
+    except Exception:
+        invite_ok = False
+    if not (inviter and getattr(inviter, "role", None) == "admin") and not invite_ok:
+        return _json_error("Admin registration not permitted", 403)
+
     # Create admin user
     user = User(
         email=email,
@@ -122,6 +136,7 @@ def register_admin():
     db.session.add(user)
     db.session.commit()
 
+    token = issue_token(int(user.id), user.role or "admin")
     return (
         jsonify(
             {
@@ -132,6 +147,7 @@ def register_admin():
                 "middleName": user.middle_name,
                 "lastName": user.last_name,
                 "role": user.role,
+                "token": token,
             }
         ),
         201,
@@ -161,6 +177,7 @@ def login():
     except Exception:
         db.session.rollback()
 
+    token = issue_token(int(user.id), user.role or "student")
     return jsonify(
         {
             "id": user.id,
@@ -170,5 +187,6 @@ def login():
             "middleName": user.middle_name,
             "lastName": user.last_name,
             "role": user.role,
+            "token": token,
         }
     )

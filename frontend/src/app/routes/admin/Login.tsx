@@ -29,8 +29,8 @@ export default function AdminLoginPage() {
         setError('This account is not an admin')
         return
       }
-      // Persist session via AuthProvider and go to admin home
-      login({ id: user.id, email: user.email, role: 'admin', firstName: user.firstName, lastName: user.lastName })
+  // Persist session via AuthProvider and go to admin home
+  login({ id: user.id, email: user.email, role: 'admin', firstName: user.firstName, lastName: user.lastName, token: (user as { token?: string }).token })
       navigate('/admin')
     } catch (err: unknown) {
       const msg = (err as Error)?.message || 'Login failed'

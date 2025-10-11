@@ -6,7 +6,8 @@ import { useAuth } from '../../../lib/useAuth'
 export default function ClaimStatusPage() {
   const { claimId } = useParams<{ claimId: string }>()
   const navigate = useNavigate()
-  const { user } = useAuth()
+  // Auth hook retained for potential future enhancements (e.g., ownership checks) but user object not currently needed
+  useAuth()
   const [claim, setClaim] = useState<ClaimDto | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -144,7 +145,7 @@ export default function ClaimStatusPage() {
             {uiStatus === 'approved' && (
               <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-700 text-sm flex items-start gap-3">
                 <svg className="size-4 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12l5 5L20 7"/></svg>
-                Approved! Please proceed to pick up the item. Bring a valid ID for verification.
+                Your request is approved. Please proceed to the office to claim the item. Bring a valid ID for verification.
               </div>
             )}
             {uiStatus === 'rejected' && (

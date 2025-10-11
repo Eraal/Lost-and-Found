@@ -43,6 +43,8 @@ export default function AdminItems() {
   const [qrFor, setQrFor] = useState<AdminItem | null>(null)
   const [qr, setQr] = useState<QrCodeDto | null>(null)
   const [qrBusy, setQrBusy] = useState(false)
+  // Track which specific item is currently generating / fetching a QR
+  const [qrBusyId, setQrBusyId] = useState<number | null>(null)
   const [qrMap, setQrMap] = useState<Record<number, QrCodeDto>>({})
 
   // Filters
@@ -109,7 +111,25 @@ export default function AdminItems() {
     return () => { cancelled = true }
   }, [found, qrMap])
 
-  const items = useMemo(() => (tab === 'found' ? found : lost), [tab, found, lost])
+  // Derived grouped & sorted lists for lost/found tabs
+  const { activeItems, returnedItems } = useMemo(() => {
+    const base = (tab === 'found' ? found : lost).slice()
+    const active = base.filter(it => String(it.uiStatus) !== 'returned')
+    const returned = base.filter(it => String(it.uiStatus) === 'returned')
+    const dateOrId = (d?: string | null, id?: number) => {
+      if (d) {
+        const t = Date.parse(d)
+        if (!Number.isNaN(t)) return t
+      }
+      return (id || 0) * 1000 // ensure stable ordering if no date
+    }
+    active.sort((a, b) => dateOrId(b.reportedAt, b.id) - dateOrId(a.reportedAt, a.id))
+    returned.sort((a, b) => dateOrId(b.reportedAt, b.id) - dateOrId(a.reportedAt, a.id))
+    return { activeItems: active, returnedItems: returned }
+  }, [tab, found, lost])
+
+  // Collapsible returned section toggle
+  const [showReturned, setShowReturned] = useState(false)
 
   const setRouteTab = (t: Tab) => {
     setTab(t)
@@ -221,7 +241,9 @@ export default function AdminItems() {
                   {tab === 'matched' ? 'Matched Pairs' : tab === 'found' ? 'All Found Items' : 'All Lost Items'}
                 </h2>
                 <p className="text-sm text-gray-600">
-                  {loading ? 'Loading…' : tab === 'matched' ? `${matches.length} pair${matches.length !== 1 ? 's' : ''}` : `${items.length} item${items.length !== 1 ? 's' : ''}`}
+                  {loading ? 'Loading…' : tab === 'matched'
+                    ? `${matches.length} pair${matches.length !== 1 ? 's' : ''}`
+                    : `${activeItems.length} active • ${returnedItems.length} returned • ${activeItems.length + returnedItems.length} total`}
                 </p>
               </div>
             </div>
@@ -247,34 +269,88 @@ export default function AdminItems() {
                 ))}
               </div>
             )
-          ) : items.length === 0 ? (
+          ) : (activeItems.length + returnedItems.length) === 0 ? (
             <div className="p-12 text-center text-sm text-gray-600">No items found.</div>
           ) : (
-            <div className="p-6 space-y-4">
-              {items.map(it => (
-                <ItemRow key={it.id} item={it} qr={qrMap[it.id]} onOpen={() => setOpenItem(mapItemLike(it))} onEdit={() => setEditItem(it)} onMarkReturned={async () => {
-                  try {
-                    const updated = await adminMarkReturned(it.id)
-                    if (tab === 'lost') setLost(prev => prev.map(x => x.id === it.id ? updated : x))
-                    else setFound(prev => prev.map(x => x.id === it.id ? updated : x))
-                  } catch (e) {
-                    alert((e as Error).message || 'Failed to mark as returned')
-                  }
-                }} onQr={async () => {
-                  setQrBusy(true)
-                  setQrFor(it)
-                  try {
-                    const existing = await getItemQrCode(it.id)
-                    const data = existing ?? await createItemQrCode(it.id)
-                    setQr(data)
-                    setQrMap(prev => ({ ...prev, [it.id]: data }))
-                  } catch (e) {
-                    alert((e as Error)?.message || 'Failed to get QR')
-                  } finally {
-                    setQrBusy(false)
-                  }
-                }} />
-              ))}
+            <div className="p-6 space-y-8">
+              {/* Active / Unreturned Items */}
+              <section aria-labelledby="active-items-heading" className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 id="active-items-heading" className="text-sm font-semibold tracking-wide text-gray-700 uppercase">Active Items</h3>
+                  <div className="text-xs text-gray-500">Newest first</div>
+                </div>
+                {activeItems.length === 0 ? (
+                  <div className="rounded-xl border-2 border-amber-100 bg-amber-50/50 px-4 py-6 text-center text-xs text-amber-700">No active (unreturned) items.</div>
+                ) : (
+                  <div className="space-y-4">
+                    {activeItems.map(it => (
+                      <ItemRow key={it.id} item={it} qr={qrMap[it.id]} isReturned={false} isNew={(() => {
+                        const d = it.reportedAt ? Date.parse(it.reportedAt) : NaN
+                        if (Number.isNaN(d)) return false
+                        const ageHrs = (Date.now() - d) / 36e5
+                        return ageHrs <= 48
+                      })()} onOpen={() => setOpenItem(mapItemLike(it))} onEdit={() => setEditItem(it)} onMarkReturned={async () => {
+                        try {
+                          const updated = await adminMarkReturned(it.id)
+                          if (tab === 'lost') setLost(prev => prev.map(x => x.id === it.id ? updated : x))
+                          else setFound(prev => prev.map(x => x.id === it.id ? updated : x))
+                        } catch (e) {
+                          alert((e as Error).message || 'Failed to mark as returned')
+                        }
+                      }} onQr={async () => {
+                        setQrBusy(true)
+                        setQrBusyId(it.id)
+                        setQrFor(it)
+                        try {
+                          const existing = await getItemQrCode(it.id)
+                          const data = existing ?? await createItemQrCode(it.id)
+                          setQr(data)
+                          setQrMap(prev => ({ ...prev, [it.id]: data }))
+                        } catch (e) {
+                          alert((e as Error)?.message || 'Failed to get QR')
+                        } finally {
+                          setQrBusy(false); setQrBusyId(null)
+                        }
+                      }} qrBusy={qrBusyId === it.id} />
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              {/* Returned Items Section */}
+              <section aria-labelledby="returned-items-heading" className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 id="returned-items-heading" className="text-sm font-semibold tracking-wide text-gray-700 uppercase">Returned Items</h3>
+                  <button onClick={() => setShowReturned(v => !v)} className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                    {showReturned ? 'Hide' : 'Show'} ({returnedItems.length})
+                  </button>
+                </div>
+                {!showReturned ? (
+                  returnedItems.length === 0 ? <div className="text-xs text-gray-400">None</div> : <div className="text-xs text-gray-500">Returned items hidden</div>
+                ) : returnedItems.length === 0 ? (
+                  <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-4 text-center text-xs text-gray-500">No returned items.</div>
+                ) : (
+                  <div className="space-y-3">
+                    {returnedItems.map(it => (
+                      <ItemRow key={it.id} item={it} qr={qrMap[it.id]} isReturned isNew={false} onOpen={() => setOpenItem(mapItemLike(it))} onEdit={() => setEditItem(it)} onMarkReturned={async () => { /* no-op: already returned */ }} onQr={async () => {
+                        setQrBusy(true)
+                        setQrBusyId(it.id)
+                        setQrFor(it)
+                        try {
+                          const existing = await getItemQrCode(it.id)
+                          const data = existing ?? await createItemQrCode(it.id)
+                          setQr(data)
+                          setQrMap(prev => ({ ...prev, [it.id]: data }))
+                        } catch (e) {
+                          alert((e as Error)?.message || 'Failed to get QR')
+                        } finally {
+                          setQrBusy(false); setQrBusyId(null)
+                        }
+                      }} qrBusy={qrBusyId === it.id} />
+                    ))}
+                  </div>
+                )}
+              </section>
             </div>
           )}
         </section>
@@ -321,7 +397,7 @@ export default function AdminItems() {
   )
 }
 
-function ItemRow({ item, qr, onOpen, onEdit, onMarkReturned, onQr }: { item: AdminItem; qr?: QrCodeDto; onOpen: () => void; onEdit: () => void; onMarkReturned: () => void; onQr: () => void }) {
+function ItemRow({ item, qr, onOpen, onEdit, onMarkReturned, onQr, isReturned, isNew, qrBusy }: { item: AdminItem; qr?: QrCodeDto; onOpen: () => void; onEdit: () => void; onMarkReturned: () => void; onQr: () => void; isReturned?: boolean; isNew?: boolean; qrBusy?: boolean }) {
   const uis = String(item.uiStatus || 'unclaimed').toLowerCase()
   const label = uis.replace('_', ' ')
   const cls = uis === 'claim_approved'
@@ -335,18 +411,20 @@ function ItemRow({ item, qr, onOpen, onEdit, onMarkReturned, onQr }: { item: Adm
     : 'bg-amber-50 text-amber-700 border-amber-200'
   const chip = (
     <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold border ${cls}`}>
-      {label.charAt(0).toUpperCase() + label.slice(1).replace(' ', ' ')}
+      {label.charAt(0).toUpperCase() + label.slice(1)}
     </span>
   )
   return (
-    <div className={`relative rounded-2xl border-2 p-6 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 ${
-      uis === 'claim_approved' ? 'border-emerald-200 bg-emerald-50/30' :
-      uis === 'claim_rejected' ? 'border-rose-200 bg-rose-50/30' :
-      uis === 'returned' ? 'border-sky-200 bg-sky-50/30' :
-      uis === 'matched' ? 'border-indigo-200 bg-indigo-50/30' :
+    <div className={`relative rounded-3xl border-2 p-6 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5 group ${
+      uis === 'claim_approved' ? 'border-emerald-200 bg-emerald-50/40' :
+      uis === 'claim_rejected' ? 'border-rose-200 bg-rose-50/40' :
+      uis === 'returned' ? 'border-sky-200 bg-sky-50/60 opacity-80' :
+      uis === 'matched' ? 'border-indigo-200 bg-indigo-50/40' :
       'border-gray-200 bg-white'
-    }`}>
-      <div className="flex items-center gap-4">
+    } ${isReturned ? 'grayscale-[30%] hover:grayscale-0' : ''}`}>
+      {/* Decorative gradient ring */}
+      <div className="pointer-events-none absolute -inset-px rounded-[inherit] opacity-0 group-hover:opacity-100 transition-opacity bg-[radial-gradient(circle_at_30%_20%,rgba(59,130,246,.15),transparent_60%)]" />
+      <div className="flex flex-col md:flex-row md:items-center gap-4 relative">
         <div className="shrink-0">
           {item.photoThumbUrl || item.photoUrl ? (
             <img src={item.photoThumbUrl || item.photoUrl || ''} alt="Item" className="w-16 h-16 rounded-2xl object-cover ring-2 ring-gray-200 shadow-sm" />
@@ -358,14 +436,21 @@ function ItemRow({ item, qr, onOpen, onEdit, onMarkReturned, onQr }: { item: Adm
           <div className="flex flex-wrap items-center gap-2">
             <div className="text-base font-bold text-gray-900 truncate" title={item.title}>{item.title}</div>
             {chip}
+            {isNew && <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-gradient-to-r from-pink-500 to-rose-500 text-white text-[10px] font-semibold shadow">NEW</span>}
+            {isReturned && <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-sky-600/10 text-sky-700 ring-1 ring-sky-600/20 text-[10px] font-semibold">Returned</span>}
           </div>
           <div className="mt-1 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs text-gray-600">
             <span className="inline-flex items-center gap-1 font-medium"><TypeIcon /> {item.type === 'found' ? 'Found' : 'Lost'}</span>
             <span className="inline-flex items-center gap-1 font-medium truncate"><MapPinIcon /> {item.location || '—'}</span>
             {item.occurredOn && <span className="inline-flex items-center gap-1 font-medium"><CalendarIcon /> {new Date(item.occurredOn).toLocaleDateString()}</span>}
-            {item.reportedAt && <span className="inline-flex items-center gap-1 font-medium"><ClockIcon /> {new Date(item.reportedAt).toLocaleString()}</span>}
-            {item.reporter && <span className="inline-flex items-center gap-1 font-medium truncate"><UserIcon /> <strong className='font-semibold'>Finder:</strong> {item.reporter.email || [item.reporter.firstName, item.reporter.lastName].filter(Boolean).join(' ') || '—'}</span>}
+            {item.reportedAt && <span className="inline-flex items-center gap-1 font-medium"><ClockIcon /> {relativeTime(item.reportedAt)}</span>}
+            {item.reporter && <span className="inline-flex items-center gap-1 font-medium truncate col-span-2 sm:col-span-4"><UserIcon /> <strong className='font-semibold'>Finder:</strong> {item.reporter.email || [item.reporter.firstName, item.reporter.lastName].filter(Boolean).join(' ') || '—'}</span>}
           </div>
+          {item.description && (
+            <p className="mt-3 text-xs leading-relaxed text-gray-700 line-clamp-2 bg-gray-50 rounded-lg p-2 border border-gray-100">
+              {item.description}
+            </p>
+          )}
           {item.type === 'found' && qr && (
             <div className="mt-2 inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1">
               <QrInline code={qr.code} />
@@ -374,18 +459,21 @@ function ItemRow({ item, qr, onOpen, onEdit, onMarkReturned, onQr }: { item: Adm
             </div>
           )}
         </div>
-        <div className="shrink-0 inline-flex items-center gap-2">
+        <div className="shrink-0 inline-flex items-center gap-2 self-start md:self-center flex-wrap">
           <button onClick={onOpen} className="inline-flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold border-2 border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:border-blue-300"><EyeIcon /> View</button>
           <button onClick={onEdit} className="inline-flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold border-2 border-gray-200 bg-white text-gray-800 hover:bg-gray-50"><EditIcon /> Edit</button>
           {item.type === 'found' && (
-            <button onClick={onQr} className="inline-flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold border-2 border-gray-200 bg-white text-gray-800 hover:bg-gray-50"><QrIcon /> QR</button>
+            <button onClick={onQr} className="inline-flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold border-2 border-gray-200 bg-white text-gray-800 hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed" disabled={qrBusy}>
+              {qrBusy ? <SpinnerIcon /> : <QrIcon />}{qr ? 'QR Code' : 'Generate QR'}
+            </button>
           )}
-          {uis !== 'returned' && (
+          {!isReturned && uis !== 'returned' && (
             <button onClick={onMarkReturned} className="inline-flex items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold bg-gradient-to-r from-sky-600 to-cyan-600 hover:from-sky-700 hover:to-cyan-700 text-white"><ReturnIcon /> Returned</button>
           )}
           <DeleteItemButton itemId={item.id} title={item.title} />
         </div>
       </div>
+      {isReturned && <div className="absolute inset-x-0 bottom-0 h-1 rounded-b-2xl bg-gradient-to-r from-sky-400/40 via-cyan-400/40 to-sky-400/40" />}
     </div>
   )
 }
@@ -741,9 +829,8 @@ function XIcon(props: React.SVGProps<SVGSVGElement>) {
 function QrPreviewModal({ item, qr, onClose, onRegenerate, busy }: { item: AdminItem; qr: QrCodeDto; onClose: () => void; onRegenerate: () => void; busy?: boolean }) {
   const apiBase = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000/api/v1'
   const img = `${apiBase}/qrcodes/${qr.code}/image?size=8`
-  const scanUrl = qr.url || `${apiBase}/qrcodes/${qr.code}/item`
-  const frontBase = (import.meta.env.VITE_PUBLIC_BASE_URL as string | undefined) || (typeof window !== 'undefined' ? window.location.origin : '')
-  const publicPage = frontBase ? `${frontBase.replace(/\/$/, '')}/scan/${qr.code}` : ''
+  const scanUrl = qr.canonicalUrl || qr.url || `${apiBase}/qrcodes/${qr.code}/item`
+  // Public page URL intentionally removed for unified single QR link usage
   const onPrint = () => {
     // Ensure print section images are loaded before printing
     const targets = [
@@ -761,34 +848,67 @@ function QrPreviewModal({ item, qr, onClose, onRegenerate, busy }: { item: Admin
     }
     window.print()
   }
+  const download = () => {
+    const a = document.createElement('a')
+    a.href = img
+    a.download = `item-${item.id}-qr.png`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+  }
+  const copyLink = async () => {
+    try { await navigator.clipboard?.writeText(scanUrl); alert('Link copied to clipboard') } catch { /* ignore */ }
+  }
   return (
     <div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="absolute left-1/2 top-1/2 w-[min(640px,92vw)] -translate-x-1/2 -translate-y-1/2 rounded-2xl bg-white shadow-xl border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+      <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/50 to-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute left-1/2 top-1/2 w-[min(760px,94vw)] -translate-x-1/2 -translate-y-1/2 rounded-3xl bg-white shadow-2xl border border-gray-200 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-indigo-600/5 to-blue-600/5">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-blue-100 text-blue-600"><QrIcon /></div>
+            <div className="p-2 rounded-xl bg-indigo-600 text-white shadow"><QrIcon /></div>
             <div className="text-[15px] font-semibold text-gray-900">QR Code • Found Item #{item.id}</div>
           </div>
-          <button onClick={onClose} className="size-9 inline-grid place-items-center rounded-md hover:bg-gray-100"><XIcon /></button>
+          <button onClick={onClose} className="size-9 inline-grid place-items-center rounded-lg hover:bg-black/5"><XIcon /></button>
         </div>
-        <div className="p-6 flex gap-4">
-          <img src={img} alt="QR Code" className="w-48 h-48 rounded-xl border border-gray-200" />
-          <div className="text-sm text-gray-800 min-w-0">
-            <div className="font-semibold truncate" title={item.title}>{item.title}</div>
-            <div className="text-xs text-gray-600 truncate">{item.location || '—'}</div>
-            <div className="mt-3 text-xs text-gray-500 break-all">
-              {scanUrl}
+        <div className="p-6 flex flex-col md:flex-row gap-6">
+          <div className="relative flex flex-col items-center justify-center">
+            <div className="relative p-4 rounded-2xl bg-white shadow-inner ring-1 ring-gray-200">
+              <img src={img} alt="QR Code" className="w-56 h-56 rounded-xl border border-gray-200" />
+              {qr.scanCount !== undefined && (
+                <div className="absolute -top-2 -right-2 rounded-full bg-indigo-600 text-white text-[10px] font-semibold px-2 py-1 shadow">
+                  {qr.scanCount} scan{qr.scanCount === 1 ? '' : 's'}
+                </div>
+              )}
             </div>
-            {publicPage && (
-              <div className="mt-2 text-xs">
-                Public page:{' '}
-                <a href={publicPage} target="_blank" rel="noreferrer" className="text-indigo-600 underline">{publicPage}</a>
+            <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-gray-600">
+              {qr.lastScannedAt && <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-1"><ClockIcon /> Last {relativeTime(qr.lastScannedAt)}</span>}
+              <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-1">Code: <code className="font-mono">{qr.code}</code></span>
+            </div>
+          </div>
+          <div className="text-sm text-gray-800 min-w-0 flex-1">
+            <div className="font-semibold text-lg truncate" title={item.title}>{item.title}</div>
+            <div className="text-xs text-gray-600 truncate">{item.location || '—'}</div>
+            <div className="mt-4 space-y-2">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Scan Link</div>
+              <div className="text-xs break-all rounded-lg bg-gray-50 border border-gray-200 p-2 font-mono">
+                <a href={scanUrl} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline">{scanUrl}</a>
+              </div>
+            </div>
+            {item.description && (
+              <div className="mt-4 space-y-2">
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Item Description</div>
+                <p className="text-xs leading-relaxed text-gray-700 whitespace-pre-wrap bg-gray-50 rounded-lg p-3 border border-gray-100 max-h-40 overflow-auto">
+                  {item.description}
+                </p>
               </div>
             )}
-            <div className="mt-4 inline-flex items-center gap-2">
-              <button onClick={onRegenerate} disabled={!!busy} className="rounded-lg px-3 py-2 text-sm font-semibold bg-white border border-gray-200 hover:bg-gray-50">Regenerate</button>
-              <button onClick={onPrint} className="rounded-lg px-3 py-2 text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700">Print</button>
+            <div className="mt-6 flex flex-wrap items-center gap-2">
+              <button onClick={onRegenerate} disabled={!!busy} className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold bg-white border border-gray-300 hover:bg-gray-50 disabled:opacity-50">
+                {busy ? <SpinnerIcon /> : <RefreshIcon />} Regenerate
+              </button>
+              <button onClick={onPrint} className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold bg-indigo-600 text-white hover:bg-indigo-700"><PrintIcon /> Print</button>
+              <button onClick={download} className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold bg-white border border-gray-300 hover:bg-gray-50"><DownloadIcon /> Download PNG</button>
+              <button onClick={copyLink} className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold bg-white border border-gray-300 hover:bg-gray-50"><LinkIcon /> Copy Link</button>
             </div>
           </div>
         </div>
@@ -828,9 +948,7 @@ function QrPreviewModal({ item, qr, onClose, onRegenerate, busy }: { item: Admin
                 )}
                 <div style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: '#334155' }}>Scan Link</div>
                 <div className="print-small" style={{ marginTop: '6px', wordBreak: 'break-all' }}>{scanUrl}</div>
-                {publicPage && (
-                  <div className="print-small" style={{ marginTop: '4px', wordBreak: 'break-all' }}>Public page: {publicPage}</div>
-                )}
+                {/* Public page removed for unified single QR link display */}
                 {qr.scanCount !== undefined && (
                   <div className="print-muted print-small" style={{ marginTop: '8px' }}>Scans: {qr.scanCount ?? 0}{qr.lastScannedAt ? ` • Last: ${new Date(qr.lastScannedAt).toLocaleString()}` : ''}</div>
                 )}
@@ -850,4 +968,53 @@ function QrInline({ code }: { code: string }) {
   const apiBase = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000/api/v1'
   const img = `${apiBase}/qrcodes/${code}/image?size=2`
   return <img src={img} alt="QR" className="w-8 h-8 rounded border border-gray-200 bg-white" />
+}
+
+// Small utility: human friendly relative time
+function relativeTime(date: string | number | Date): string {
+  const d = new Date(date)
+  const diffMs = Date.now() - d.getTime()
+  const abs = Math.abs(diffMs)
+  const sec = Math.round(abs / 1000)
+  const min = Math.round(sec / 60)
+  const hr = Math.round(min / 60)
+  const day = Math.round(hr / 24)
+  const fmt = (n: number, w: string) => `${n} ${w}${n !== 1 ? 's' : ''}`
+  let value: string
+  if (sec < 45) value = fmt(sec, 'second')
+  else if (min < 45) value = fmt(min, 'minute')
+  else if (hr < 24) value = fmt(hr, 'hour')
+  else if (day < 30) value = fmt(day, 'day')
+  else value = d.toLocaleDateString()
+  return diffMs >= 0 ? `${value} ago` : `in ${value}`
+}
+
+function RefreshIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} {...props}>
+      <path d="M3 3v6h6" /><path d="M21 21v-6h-6" /><path d="M21 12A9 9 0 0 0 6.3 5.3L3 9" /><path d="M3 12a9 9 0 0 0 14.7 6.7L21 15" />
+    </svg>
+  )
+}
+function PrintIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} {...props}>
+      <path d="M6 9V3h12v6" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><path d="M6 14h12v8H6z" />
+    </svg>
+  )
+}
+function DownloadIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} {...props}>
+      <path d="M12 3v14" /><path d="M6 13l6 6 6-6" /><path d="M5 21h14" />
+    </svg>
+  )
+}
+function LinkIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} {...props}>
+      <path d="M10 13a5 5 0 0 0 7.54.54l2-2a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-2 2a5 5 0 0 0 7.07 7.07l1.72-1.71" />
+    </svg>
+  )
 }

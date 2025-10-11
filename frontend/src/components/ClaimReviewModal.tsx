@@ -27,6 +27,12 @@ export default function ClaimReviewModal({
   const item = claim?.item
   const user = claim?.user
   const status = useMemo(() => (claim ? (claim.status === 'requested' ? 'pending' : claim.status) : 'pending'), [claim])
+  const isReturned = !!claim?.returned
+  const claimerName = claim?.returnClaimerName
+  type FinderReporter = { id?: number; email?: string; firstName?: string; lastName?: string; studentId?: string }
+  const finder: FinderReporter | undefined = (claim?.item && typeof (claim.item as Record<string, unknown>).reporter === 'object')
+    ? ( (claim.item as Record<string, unknown>).reporter as FinderReporter )
+    : undefined
 
   // Load other claims for the same item so admins see potential duplicates
   useEffect(() => {
@@ -73,7 +79,13 @@ export default function ClaimReviewModal({
               </div>
               
               <div className="flex items-center gap-3 flex-wrap">
-                <StatusBadge status={status as ReviewStatus} />
+                {isReturned ? (
+                  <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold border-2 shadow-sm bg-gradient-to-r from-sky-100 to-cyan-100 text-sky-800 border-sky-200">
+                    <span>↩</span> Returned
+                  </span>
+                ) : (
+                  <StatusBadge status={status as ReviewStatus} />
+                )}
                 {typeof claim?.matchScore === 'number' && (
                   <span className="inline-flex items-center gap-2 rounded-full bg-white/20 backdrop-blur-sm text-white text-sm font-medium px-3 py-1.5" title="Suggested match confidence">
                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -184,7 +196,7 @@ export default function ClaimReviewModal({
                       {typeof claim?.matchScore === 'number' && (
                         <div className="p-4 rounded-xl bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-200">
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-semibold text-indigo-900">AI Match Confidence</span>
+                            <span className="text-sm font-semibold text-indigo-900">Match Confidence</span>
                             <span className="text-lg font-bold text-indigo-600">{Math.round(claim.matchScore)}%</span>
                           </div>
                           <div className="w-full bg-white rounded-full h-3 shadow-inner overflow-hidden">
@@ -279,7 +291,7 @@ export default function ClaimReviewModal({
                 
                 <div className="p-4">
                   {/* Student Avatar & Name */}
-                  <div className="flex items-center gap-3 mb-4">
+                    <div className="flex items-center gap-3 mb-4">
                     <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white flex items-center justify-center text-lg font-bold shadow-lg">
                       {((user?.firstName?.[0] || '') + (user?.lastName?.[0] || '')).toUpperCase() || 'S'}
                     </div>
@@ -290,6 +302,25 @@ export default function ClaimReviewModal({
                       <p className="text-gray-600 text-sm truncate">{user?.email || '—'}</p>
                     </div>
                   </div>
+                    {isReturned && claimerName && (
+                      <div className="mb-4 p-3 rounded-lg bg-sky-50 border border-sky-200 text-sky-800 text-xs font-medium flex items-center gap-2">
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 12h13a5 5 0 1 1 0 10H7"/><polyline points="9,15 3,12 9,9"/></svg>
+                        Returned to: <span className="font-semibold">{claimerName}</span>{claim?.returnOverride ? <span className="ml-1 text-[10px] uppercase tracking-wide bg-sky-200 text-sky-800 px-1.5 py-0.5 rounded">override</span> : null}
+                      </div>
+                    )}
+                    {finder && (
+                      <div className="mb-4 p-3 rounded-lg bg-green-50 border border-green-200 text-green-800 text-xs font-medium">
+                        <div className="flex items-center gap-2 mb-1">
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/></svg>
+                          <span className="font-semibold">Finder (Reporter)</span>
+                        </div>
+                        <div className="grid grid-cols-1 gap-1">
+                          <div><span className="font-semibold">Name:</span> {[finder.firstName, finder.lastName].filter(Boolean).join(' ') || '—'}</div>
+                          <div><span className="font-semibold">Email:</span> {finder.email || '—'}</div>
+                          {finder.studentId && <div><span className="font-semibold">Student ID:</span> {finder.studentId}</div>}
+                        </div>
+                      </div>
+                    )}
 
                   {/* Student Details (simplified) */}
                   <div className="space-y-2">
@@ -351,7 +382,7 @@ export default function ClaimReviewModal({
                 </div>
                 
                 <div className="p-4 space-y-3">
-                  {status !== 'rejected' && (
+                  {!isReturned && status !== 'rejected' && (
                     <>
                       <button
                         disabled={busy}
@@ -408,7 +439,7 @@ export default function ClaimReviewModal({
                     </>
                   )}
                   
-                  {status === 'approved' && onMarkReturned && (
+                  {status === 'approved' && !isReturned && onMarkReturned && (
                     <button
                       disabled={busy}
                       onClick={() => onMarkReturned()}
@@ -428,10 +459,16 @@ export default function ClaimReviewModal({
                     </button>
                   )}
 
-                  {status === 'rejected' && (
+                  {status === 'rejected' && !isReturned && (
                     <div className="p-4 rounded-xl bg-red-50 border border-red-200 text-center">
                       <div className="text-red-600 font-semibold mb-2">❌ Claim Rejected</div>
                       <p className="text-red-700 text-sm">This claim has been rejected and cannot be modified.</p>
+                    </div>
+                  )}
+                  {isReturned && (
+                    <div className="p-4 rounded-xl bg-sky-50 border border-sky-200 text-center text-sky-800">
+                      <div className="font-semibold mb-1">Item Returned</div>
+                      <p className="text-sm">This claim has been fulfilled and the item was returned to the student.</p>
                     </div>
                   )}
                 </div>

@@ -386,11 +386,15 @@ def create_item():
         except Exception:
             reporter_id = None
     elif reporter is not None:
-        # Backward compatibility for older clients still sending reporterUserId
-        try:
-            reporter_id = int(reporter)
-        except (TypeError, ValueError):
-            return jsonify({"error": "Invalid reporter user id"}), 400
+        # Backward compatibility for older clients still sending reporterUserId (dev only)
+        if current_app.config.get('DEBUG'):
+            try:
+                reporter_id = int(reporter)
+            except (TypeError, ValueError):
+                return jsonify({"error": "Invalid reporter user id"}), 400
+        else:
+            # In production, do not allow client-supplied reporter id without auth
+            reporter_id = None
 
     # Persist
     item = Item(

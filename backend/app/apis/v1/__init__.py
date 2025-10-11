@@ -1,4 +1,4 @@
-from flask import Blueprint, Flask, g, request
+from flask import Blueprint, Flask, g, request, current_app
 
 from ...modules.items.routes import bp as items_bp
 from ...modules.claims.routes import bp as claims_bp
@@ -15,33 +15,48 @@ from ...modules.qrcodes.routes import bp as qrcodes_bp
 def register_api(app: Flask) -> None:
     api_v1 = Blueprint("api_v1", __name__, url_prefix="/api/v1")
 
-    # Lightweight auth context loader. In lieu of a full session / JWT implementation,
-    # we accept either an `X-User-Id` header or an `Authorization: User <id>` header.
-    # This enables automatic attribution of item reports to the currently "logged in" user
-    # (as represented by the frontend's stored user id) without requiring a reporterUserId
-    # field in the POST body.
+    # Lightweight auth context loader with production-safe behavior.
+    # In development (DEBUG=True) we accept either an `X-User-Id` header or an
+    # `Authorization: User <id>` header to simplify local testing.
+    # In production (DEBUG=False), require a signed bearer token issued by our app.
     @api_v1.before_request  # type: ignore
     def _load_current_user():  # pragma: no cover - simple request context helper
         from ...models.user import User  # local import to avoid circulars
+        from ...security import verify_token
         uid: int | None = None
-        raw = request.headers.get("X-User-Id") or ""
-        if not raw:
-            auth = request.headers.get("Authorization") or ""
-            if auth.lower().startswith("user "):
+        role: str | None = None
+        debug_mode = bool(current_app.config.get("DEBUG"))
+
+        # Bearer token takes precedence
+        auth = request.headers.get("Authorization") or ""
+        if auth.lower().startswith("bearer "):
+            token = auth[7:].strip()
+            tuid, trole = verify_token(token)
+            uid, role = tuid, trole
+        elif debug_mode:
+            # Dev-only header shortcuts
+            raw = request.headers.get("X-User-Id") or ""
+            if not raw and auth.lower().startswith("user "):
                 raw = auth[5:].strip()
-        if raw:
-            try:
-                cand = int(raw)
-                if cand > 0:
-                    uid = cand
-            except Exception:
-                uid = None
+            if raw:
+                try:
+                    cand = int(raw)
+                    if cand > 0:
+                        uid = cand
+                except Exception:
+                    uid = None
         user_obj = None
         if uid is not None:
             try:
                 user_obj = User.query.get(uid)
             except Exception:
                 user_obj = None
+        # Optionally attach role override from token
+        if user_obj is not None and role:
+            try:
+                setattr(user_obj, "role", role)
+            except Exception:
+                pass
         g.current_user = user_obj  # type: ignore[attr-defined]
         g.current_user_id = getattr(user_obj, 'id', None) if user_obj else None  # type: ignore[attr-defined]
 

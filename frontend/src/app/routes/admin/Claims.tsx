@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { listClaims, updateClaimStatus, markClaimReturned, type ClaimDto, type ClaimItemLite, type ClaimUserLite } from '../../../lib/api'
+import { listClaims, updateClaimStatus, type ClaimDto, type ClaimItemLite, type ClaimUserLite } from '../../../lib/api'
+import { useAuth } from '../../../lib/useAuth'
 import ClaimReviewModal from '../../../components/ClaimReviewModal'
 
-type Filter = 'all' | 'pending' | 'approved' | 'rejected'
+type Filter = 'all' | 'pending' | 'approved' | 'rejected' | 'returned'
 
 export default function AdminClaims() {
   const location = useLocation()
@@ -16,6 +17,8 @@ export default function AdminClaims() {
     ? 'approved'
     : path.endsWith('/rejected')
     ? 'rejected'
+    : path.endsWith('/returned')
+    ? 'returned'
     : 'all'
 
   const [filter, setFilter] = useState<Filter>(routeFilter)
@@ -25,6 +28,7 @@ export default function AdminClaims() {
   const [error, setError] = useState<string | null>(null)
   const [reviewOpen, setReviewOpen] = useState(false)
   const [reviewClaim, setReviewClaim] = useState<ClaimDto | null>(null)
+  const { user: authUser } = useAuth()
 
   useEffect(() => {
     setFilter(routeFilter)
@@ -49,19 +53,23 @@ export default function AdminClaims() {
 
   const filtered = useMemo(() => {
     if (filter === 'all') return claims
-    return claims.filter(c => (c.status === 'requested' ? 'pending' : c.status) === filter)
+    return claims.filter(c => {
+      const normalized = (c.status === 'requested' ? 'pending' : c.status)
+      if (filter === 'returned') return !!c.returned
+      return normalized === filter
+    })
   }, [claims, filter])
 
   const setRouteFilter = (f: Filter) => {
     setFilter(f)
     if (f === 'all') navigate('/admin/claims', { replace: true })
-    else navigate(`/admin/claims/${f}`, { replace: true })
+  else navigate(`/admin/claims/${f}`, { replace: true })
   }
 
   const handleUpdate = async (id: number, status: 'pending' | 'approved' | 'rejected', adminNotes?: string) => {
     try {
       setBusyId(id)
-      const updated = await updateClaimStatus(id, status, undefined, adminNotes)
+      const updated = await updateClaimStatus(id, status, undefined, adminNotes, authUser?.id, authUser?.id)
       setClaims(prev => prev.map(c => (c.id === id ? { ...c, ...updated } : c)))
     } catch (e) {
       alert((e as Error).message || 'Failed to update claim')
@@ -70,15 +78,36 @@ export default function AdminClaims() {
     }
   }
 
-  const handleReturned = async (id: number) => {
+  const [returnPrompt, setReturnPrompt] = useState<{ id: number; open: boolean } | null>(null)
+  const [overrideClaimerUserId, setOverrideClaimerUserId] = useState('')
+  const [overrideClaimerName, setOverrideClaimerName] = useState('')
+  const [returnBusy, setReturnBusy] = useState(false)
+
+  const submitReturn = async () => {
+    if (!returnPrompt) return
     try {
-      setBusyId(id)
-      const updated = await markClaimReturned(id)
-      setClaims(prev => prev.map(c => (c.id === id ? { ...c, ...updated } : c)))
+      setReturnBusy(true)
+      const body: Record<string, unknown> = {}
+      if (overrideClaimerUserId.trim()) body.claimerUserId = Number(overrideClaimerUserId.trim())
+      if (overrideClaimerName.trim()) body.claimerName = overrideClaimerName.trim()
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (authUser?.id) headers['X-User-Id'] = String(authUser.id)
+      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000/api/v1'}/claims/${returnPrompt.id}/return`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body)
+      })
+      const data = await res.json().catch(() => ({})) as { claim?: ClaimDto, error?: string }
+      if (!res.ok) throw new Error(data.error || 'Failed to mark returned')
+      const updated = data.claim as ClaimDto
+      setClaims(prev => prev.map(c => (c.id === returnPrompt.id ? { ...c, ...updated } : c)))
+      setReturnPrompt(null)
+      setOverrideClaimerUserId('')
+      setOverrideClaimerName('')
     } catch (e) {
       alert((e as Error).message || 'Failed to mark returned')
     } finally {
-      setBusyId(null)
+      setReturnBusy(false)
     }
   }
 
@@ -108,7 +137,7 @@ export default function AdminClaims() {
               Admin Dashboard
             </div>
             <div className="inline-flex items-center gap-1 rounded-xl border border-gray-200 bg-white/90 backdrop-blur-sm p-1 shadow-lg">
-              {(['all','pending','approved','rejected'] as const).map(v => (
+              {(['all','pending','approved','rejected','returned'] as const).map(v => (
                 <button
                   key={v}
                   onClick={() => setRouteFilter(v)}
@@ -143,14 +172,21 @@ export default function AdminClaims() {
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">
-                    {filter === 'all' ? 'All Claims' : 
-                     filter === 'pending' ? 'Pending Review' :
-                     filter === 'approved' ? 'Approved Claims' :
-                     'Rejected Claims'}
+                    {filter === 'all'
+                      ? 'All Claims'
+                      : filter === 'pending'
+                      ? 'Pending Review'
+                      : filter === 'approved'
+                      ? 'Approved Claims'
+                      : filter === 'rejected'
+                      ? 'Rejected Claims'
+                      : filter === 'returned'
+                      ? 'Returned Claims'
+                      : 'Claims'}
                   </h2>
                   <p className="text-sm text-gray-600">
                     {loading ? 'Loading claims...' : 
-                     `${filtered.length} claim${filtered.length !== 1 ? 's' : ''} ${filter === 'all' ? 'in total' : `marked as ${filter}`}`}
+                     `${filtered.length} claim${filtered.length !== 1 ? 's' : ''} ${filter === 'all' ? 'in total' : filter === 'returned' ? 'marked as returned' : `marked as ${filter}`}`}
                   </p>
                 </div>
               </div>
@@ -197,12 +233,12 @@ export default function AdminClaims() {
                   {filter === 'all' ? 'No Claims Found' :
                    filter === 'pending' ? 'No Pending Claims' :
                    filter === 'approved' ? 'No Approved Claims' :
-                   'No Rejected Claims'}
+                   filter === 'rejected' ? 'No Rejected Claims' : 'No Returned Claims'}
                 </h3>
                 <p className="text-gray-600">
                   {filter === 'pending' ? 'All caught up! No claims awaiting your review.' :
                    filter === 'all' ? 'No students have submitted any claims yet.' :
-                   `No claims have been ${filter} at this time.`}
+                   filter === 'returned' ? 'No items have been marked as returned yet.' : `No claims have been ${filter} at this time.`}
                 </p>
               </div>
             ) : (
@@ -212,7 +248,7 @@ export default function AdminClaims() {
                     key={c.id}
                     claim={c}
                     onUpdate={handleUpdate}
-                    onReturned={handleReturned}
+                    onReturned={(id) => setReturnPrompt({ id, open: true })}
                     busy={busyId === c.id}
                     onOpen={() => { setReviewClaim(c); setReviewOpen(true) }}
                   />
@@ -234,10 +270,41 @@ export default function AdminClaims() {
           }}
           onMarkReturned={async () => {
             if (!reviewClaim) return
-            await handleReturned(reviewClaim.id)
+            setReturnPrompt({ id: reviewClaim.id, open: true })
             setReviewOpen(false)
           }}
         />
+        {returnPrompt?.open && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true">
+            <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-gray-200">
+              <div className="px-5 py-4 border-b border-gray-200 flex items-center justify-between">
+                <div className="text-lg font-semibold text-gray-900">Confirm Return</div>
+                <button onClick={() => { if (!returnBusy) setReturnPrompt(null) }} className="size-9 inline-grid place-items-center rounded-md hover:bg-gray-100" aria-label="Close">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m18 6-12 12"/><path d="m6 6 12 12"/></svg>
+                </button>
+              </div>
+              <div className="px-5 py-4 space-y-4 text-sm">
+                <p className="text-gray-700">Optionally override the claimer's identity if a different authorized student collected the item.</p>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Override Claimer User ID (optional)</label>
+                  <input value={overrideClaimerUserId} onChange={e => setOverrideClaimerUserId(e.target.value)} placeholder="e.g. 123" className="w-full rounded-lg border-2 border-gray-200 px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Override Claimer Name (optional)</label>
+                  <input value={overrideClaimerName} onChange={e => setOverrideClaimerName(e.target.value)} placeholder="e.g. John Doe" className="w-full rounded-lg border-2 border-gray-200 px-3 py-2 text-sm" />
+                </div>
+                <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-amber-800 text-xs">Leave both fields blank to use the original claimant on record.</div>
+              </div>
+              <div className="px-5 py-4 border-t border-gray-200 flex items-center justify-end gap-3">
+                <button disabled={returnBusy} onClick={() => setReturnPrompt(null)} className="rounded-xl border-2 border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50">Cancel</button>
+                <button disabled={returnBusy} onClick={submitReturn} className={`rounded-xl px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-sky-600 to-cyan-600 hover:from-sky-700 hover:to-cyan-700 disabled:opacity-50 inline-flex items-center gap-2`}>
+                  {returnBusy && <span className="w-4 h-4 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />}
+                  Mark Returned
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -245,6 +312,7 @@ export default function AdminClaims() {
 
 function ClaimRow({ claim, onUpdate, onReturned, busy, onOpen }: { claim: ClaimDto; onUpdate: (id: number, status: 'pending'|'approved'|'rejected', adminNotes?: string) => void; onReturned: (id: number) => void; busy?: boolean; onOpen: () => void }) {
   const s = (claim.status === 'requested' ? 'pending' : claim.status) as 'pending' | 'approved' | 'rejected' | 'verified' | 'cancelled'
+  const isReturned = !!claim.returned
   const item = claim.item as ClaimItemLite | undefined
   const user = claim.user as ClaimUserLite | undefined
 
@@ -260,6 +328,7 @@ function ClaimRow({ claim, onUpdate, onReturned, busy, onOpen }: { claim: ClaimD
 
   return (
     <div className={`relative rounded-2xl border-2 p-6 transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 ${
+      isReturned ? 'border-sky-200 bg-sky-50/40' :
       s === 'approved' ? 'border-green-200 bg-green-50/30' :
       s === 'rejected' ? 'border-red-200 bg-red-50/30' :
       s === 'pending' ? 'border-amber-200 bg-amber-50/30' :
@@ -305,9 +374,9 @@ function ClaimRow({ claim, onUpdate, onReturned, busy, onOpen }: { claim: ClaimD
             </h3>
             
             {/* Status Badge */}
-            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold border-2 ${statusConfig.bg} ${statusConfig.text} ${statusConfig.border} shadow-sm`}>
-              <span>{statusConfig.icon}</span>
-              {s.charAt(0).toUpperCase() + s.slice(1)}
+            <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-semibold border-2 ${isReturned ? 'bg-sky-100 text-sky-700 border-sky-200' : statusConfig.bg + ' ' + statusConfig.text + ' ' + statusConfig.border} shadow-sm`}>
+              <span>{isReturned ? '↩' : statusConfig.icon}</span>
+              {isReturned ? 'Returned' : (s.charAt(0).toUpperCase() + s.slice(1))}
             </span>
 
             {/* Match Score */}
@@ -371,7 +440,7 @@ function ClaimRow({ claim, onUpdate, onReturned, busy, onOpen }: { claim: ClaimD
 
         {/* Action Buttons */}
         <div className="shrink-0 flex flex-col gap-2">
-          {s !== 'rejected' && (
+          {!isReturned && s !== 'rejected' && s !== 'approved' && (
             <>
               <button
                 disabled={busy}
@@ -414,10 +483,9 @@ function ClaimRow({ claim, onUpdate, onReturned, busy, onOpen }: { claim: ClaimD
               <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
               <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
             </svg>
-            Review
+            {isReturned ? 'View' : 'Review'}
           </button>
-
-          {s === 'approved' && (
+          {s === 'approved' && !isReturned && (
             <button
               disabled={busy}
               onClick={() => onReturned(claim.id)}
@@ -431,6 +499,11 @@ function ClaimRow({ claim, onUpdate, onReturned, busy, onOpen }: { claim: ClaimD
               <ReturnIcon />
               Returned
             </button>
+          )}
+          {isReturned && claim.returnClaimerName && (
+            <div className="mt-2 text-[10px] leading-tight text-sky-700 font-medium bg-sky-50 border border-sky-200 rounded-lg px-2 py-1">
+              Claimed by: <span className="font-semibold">{claim.returnClaimerName}</span>
+            </div>
           )}
         </div>
       </div>

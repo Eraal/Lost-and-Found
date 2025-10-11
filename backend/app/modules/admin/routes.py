@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, date
 from typing import Iterable
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, g
 
 from ...extensions import db
 from ...models.item import Item
@@ -27,6 +27,13 @@ except Exception:  # pragma: no cover
         return None
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
+
+
+@bp.before_request
+def _require_admin():
+    u = getattr(g, "current_user", None)
+    if not u or getattr(u, "role", None) != "admin":
+        return jsonify({"error": "Admin access required"}), 403
 
 
 def _parse_date(value: str | None) -> date | None:
@@ -265,14 +272,17 @@ def admin_stats_daily():
 def admin_stats_overview():
     """Overall counts used by Admin Dashboard summary cards.
 
-    Returns: { lost, found, claimed, pending }
-    - pending counts items not yet finalized (status 'open' or 'matched').
+    Returns: { lost, found, claimed, returned, pending }
+    - claimed: items whose status is 'claimed'
+    - returned: items whose status is 'closed' (returned to owner)
+    - pending: items not yet finalized (status 'open' or 'matched').
     """
     from sqlalchemy import func
 
     lost = int((db.session.query(func.count(Item.id)).filter(Item.type == "lost").scalar() or 0))
     found = int((db.session.query(func.count(Item.id)).filter(Item.type == "found").scalar() or 0))
     claimed = int((db.session.query(func.count(Item.id)).filter(Item.status == "claimed").scalar() or 0))
+    returned = int((db.session.query(func.count(Item.id)).filter(Item.status == "closed").scalar() or 0))
     pending = int((
         db.session.query(func.count(Item.id))
         .filter(Item.status.in_(["open", "matched"]))
@@ -283,6 +293,7 @@ def admin_stats_overview():
         "lost": lost,
         "found": found,
         "claimed": claimed,
+        "returned": returned,
         "pending": pending,
     })
 

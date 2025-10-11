@@ -4,13 +4,11 @@ import {
   getAdminDailyStats,
   getAdminOverviewStats,
   getAdminReportsSeries,
-  listAuditEvents,
   listUrgentClaims,
   listPendingMatches,
   type AdminDailyStats,
   type AdminOverviewStats,
   type ReportsPoint,
-  type AuditEvent,
   type PendingMatchLite,
   type UrgentClaimLite,
   listItems,
@@ -26,12 +24,11 @@ export default function AdminDashboard() {
   const navigate = useNavigate()
   const [counts, setCounts] = useState<AdminDailyStats>({ newReports: 0, pendingClaims: 0, successfulReturns: 0 })
   const [priorityAlerts, setPriorityAlerts] = useState<Activity[]>([])
-  const [activity, setActivity] = useState<Activity[]>([])
   const [matches, setMatches] = useState<PendingMatchLite[]>([])
   const [items, setItems] = useState<ItemDto[]>([])
   const [busyMatchId, setBusyMatchId] = useState<string | number | null>(null)
   const [loading, setLoading] = useState(true)
-  const [totals, setTotals] = useState<AdminOverviewStats>({ lost: 0, found: 0, claimed: 0, pending: 0 })
+  const [totals, setTotals] = useState<AdminOverviewStats>({ lost: 0, found: 0, claimed: 0, returned: 0, pending: 0 })
   const [series, setSeries] = useState<ReportsPoint[]>([])
   const [rangeDays, setRangeDays] = useState(30)
 
@@ -40,13 +37,12 @@ export default function AdminDashboard() {
     ;(async () => {
       try {
         setLoading(true)
-        const [stats, urgent, events, pending, list, ov, pts] = await Promise.all([
+        const [stats, urgent, pending, list, ov, pts] = await Promise.all([
           getAdminDailyStats().catch(() => ({ newReports: 0, pendingClaims: 0, successfulReturns: 0 })),
           listUrgentClaims(5).catch(() => [] as UrgentClaimLite[]),
-          listAuditEvents(8).catch(() => [] as AuditEvent[]),
           listPendingMatches(5).catch(() => [] as PendingMatchLite[]),
           listItems({ limit: 500 }).catch(() => [] as ItemDto[]),
-          getAdminOverviewStats().catch(() => ({ lost: 0, found: 0, claimed: 0, pending: 0 })),
+          getAdminOverviewStats().catch(() => ({ lost: 0, found: 0, claimed: 0, returned: 0, pending: 0 })),
           getAdminReportsSeries(rangeDays).catch(() => [] as ReportsPoint[]),
         ])
         if (cancelled) return
@@ -61,15 +57,7 @@ export default function AdminDashboard() {
             at: u.createdAt,
           }))
         )
-        setActivity(
-          events.map((e) => ({
-            id: e.id,
-            type: e.type,
-            message: e.message,
-            user: e.userEmail ?? undefined,
-            at: e.createdAt,
-          }))
-        )
+        // Activity removed
         setMatches(pending)
         setItems(list)
         setSeries(pts)
@@ -242,7 +230,7 @@ export default function AdminDashboard() {
           </div>
         </section>
 
-        {/* Overview totals */}
+        {/* Overview totals (streamlined per request) */}
         <section className="mb-8 grid grid-cols-2 sm:grid-cols-4 gap-4">
           <div className="rounded-2xl bg-white border border-gray-200 shadow-lg p-6 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
             <div className="flex items-center justify-between mb-3">
@@ -273,35 +261,33 @@ export default function AdminDashboard() {
             </div>
             <div className="text-sm text-gray-700 font-medium">Total Found</div>
           </div>
-
           <div className="rounded-2xl bg-white border border-gray-200 shadow-lg p-6 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
             <div className="flex items-center justify-between mb-3">
-              <div className="p-3 rounded-xl bg-purple-100 text-purple-600">
+              <div className="p-3 rounded-xl bg-teal-100 text-teal-600">
                 <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                  <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
                 </svg>
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold text-purple-600">{totals.claimed}</div>
+                <div className="text-2xl font-bold text-teal-600">{totals.returned}</div>
                 <div className="text-xs text-gray-500 font-medium">Items</div>
               </div>
             </div>
-            <div className="text-sm text-gray-700 font-medium">Total Claimed</div>
+            <div className="text-sm text-gray-700 font-medium">Returned</div>
           </div>
-
           <div className="rounded-2xl bg-white border border-gray-200 shadow-lg p-6 transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5">
             <div className="flex items-center justify-between mb-3">
-              <div className="p-3 rounded-xl bg-amber-100 text-amber-600">
+              <div className="p-3 rounded-xl bg-rose-100 text-rose-600">
                 <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                  <path d="M12 2a10 10 0 100 20 10 10 0 000-20zm1 5a1 1 0 10-2 0v5a1 1 0 00.293.707l3 3a1 1 0 001.414-1.414L13 11.586V7z"/>
                 </svg>
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold text-amber-600">{totals.pending}</div>
-                <div className="text-xs text-gray-500 font-medium">Items</div>
+                <div className="text-2xl font-bold text-rose-600">{counts.pendingClaims}</div>
+                <div className="text-xs text-gray-500 font-medium">Claims</div>
               </div>
             </div>
-            <div className="text-sm text-gray-700 font-medium">Pending</div>
+            <div className="text-sm text-gray-700 font-medium">Pending Claims</div>
           </div>
         </section>
 
@@ -368,123 +354,8 @@ export default function AdminDashboard() {
           </div>
         </section>
 
-        {/* Grid: Quick actions, Activity, Matching, Analytics */}
+        {/* Grid: Matching & Analytics (Quick actions + Recent activity removed) */}
         <section className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-          {/* Quick actions */}
-          <div className="xl:col-span-4">
-            <div className="rounded-2xl bg-white border border-gray-200 shadow-lg overflow-hidden">
-              <div className="p-6 border-b border-gray-200">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-blue-100 text-blue-600">
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900">Quick Actions</h3>
-                    <p className="text-sm text-gray-600">Common admin tasks</p>
-                  </div>
-                </div>
-              </div>
-              <div className="p-6">
-                <div className="grid grid-cols-1 gap-3">
-                  <button 
-                    onClick={() => navigate('/admin/claims/pending')} 
-                    className="flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white transition-all shadow-lg hover:shadow-xl"
-                  >
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                    <span className="font-medium">Approve Claims</span>
-                  </button>
-                  <button 
-                    onClick={() => navigate('/admin/items/lost')} 
-                    className="flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all shadow-lg hover:shadow-xl"
-                  >
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-                    </svg>
-                    <span className="font-medium">Moderate Reports</span>
-                  </button>
-                  <button 
-                    onClick={() => navigate('/admin/social/posts')} 
-                    className="flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white transition-all shadow-lg hover:shadow-xl"
-                  >
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/>
-                    </svg>
-                    <span className="font-medium">Post to Facebook</span>
-                  </button>
-                  <button 
-                    onClick={() => navigate('/admin/claims')} 
-                    className="flex items-center gap-3 p-4 rounded-xl border-2 border-gray-200 bg-white hover:bg-gray-50 text-gray-700 transition-all hover:border-blue-300"
-                  >
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-                    </svg>
-                    <span className="font-medium">View All Claims</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Recent Activity */}
-          <div className="xl:col-span-4">
-            <div className="rounded-2xl bg-white border border-gray-200 shadow-lg overflow-hidden">
-              <div className="p-6 border-b border-gray-200">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-lg bg-green-100 text-green-600">
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
-                    <p className="text-sm text-gray-600">Latest system events</p>
-                  </div>
-                </div>
-              </div>
-              <div className="p-6">
-                {loading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="text-center">
-                      <div className="w-6 h-6 border-4 border-green-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-                      <p className="text-sm text-gray-600">Loading activity...</p>
-                    </div>
-                  </div>
-                ) : activity.length === 0 ? (
-                  <div className="text-center py-8">
-                    <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-gray-100 flex items-center justify-center">
-                      <svg className="w-6 h-6 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                    <p className="text-sm text-gray-600">No recent activity</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {activity.map((e) => (
-                      <div key={e.id} className="flex items-start gap-3 p-3 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors">
-                        <div className="w-2 h-2 rounded-full bg-green-500 mt-2 shrink-0"></div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm text-gray-900 mb-1">{e.message}</div>
-                          <div className="flex items-center gap-2 text-xs text-gray-500">
-                            <span className="px-2 py-0.5 bg-white rounded-full font-medium">
-                              {e.user ?? 'System'}
-                            </span>
-                            <span>•</span>
-                            <span>{timeAgo(e.at)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
           {/* Matching Queue */}
           <div className="xl:col-span-4">
             <div className="rounded-2xl bg-white border border-gray-200 shadow-lg overflow-hidden">
@@ -745,8 +616,7 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* Spacer for layout balance */}
-          <div className="xl:col-span-4 hidden xl:block" />
+          {/* Spacer removed; grid simplified */}
         </section>
       </div>
     </div>

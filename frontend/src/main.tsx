@@ -75,6 +75,7 @@ const router = createBrowserRouter([
   { path: 'claims/pending', element: <AdminClaims /> },
   { path: 'claims/approved', element: <AdminClaims /> },
   { path: 'claims/rejected', element: <AdminClaims /> },
+  { path: 'claims/returned', element: <AdminClaims /> },
       // Items Database
   { path: 'items/lost', element: <AdminItems /> },
   { path: 'items/found', element: <AdminItems /> },

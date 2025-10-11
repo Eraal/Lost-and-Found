@@ -34,8 +34,8 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
   const user = await loginUser({ email: form.email, password: form.password });
-  // Persist via context; name fields come from backend
-  login({ id: user.id, email: user.email, role: user.role, firstName: user.firstName, lastName: user.lastName });
+  // Persist via context; include token for API auth
+  login({ id: user.id, email: user.email, role: user.role, firstName: user.firstName, lastName: user.lastName, token: (user as { token?: string }).token });
   navigate('/dashboard');
     } finally {
       setSubmitting(false);

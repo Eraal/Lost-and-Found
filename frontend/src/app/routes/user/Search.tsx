@@ -702,7 +702,7 @@ export default function SearchPage() {
                                   <div className="whitespace-pre-wrap break-words text-[var(--ink-700)]">{highlight(it.description)}</div>
                                 </div>
                               )}
-                              <div className="text-xs text-[var(--ink-500)] italic">AI score based on text similarity, location, and date proximity</div>
+                              <div className="text-xs text-[var(--ink-500)] italic">Match score based on text, location, and date similarity</div>
                             </div>
                           )}
                         </div>
