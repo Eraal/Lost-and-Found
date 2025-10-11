@@ -1,4 +1,9 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000/api/v1'
+// Resolve API base URL with safe defaults:
+// - Use explicit VITE_API_BASE_URL when provided (e.g., '/api/v1' for same-origin)
+// - Else prefer same-origin '/api/v1' in the browser to avoid CORS in production
+// - Fallback to localhost only for non-browser contexts (SSR/dev tooling)
+const API_BASE = (import.meta.env.VITE_API_BASE_URL && import.meta.env.VITE_API_BASE_URL.trim())
+  || (typeof window !== 'undefined' ? '/api/v1' : 'http://localhost:5000/api/v1')
 
 function currentToken(): string | null {
   try {
