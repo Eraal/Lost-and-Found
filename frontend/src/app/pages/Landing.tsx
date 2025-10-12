@@ -117,7 +117,7 @@ export default function LandingPage() {
               An academic, student-first hub to report, find, and recover items across the College of Computer Studies.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
-              <Link to="/report" className="inline-flex items-center justify-center rounded-md bg-[color:var(--brand)] px-5 py-2.5 text-white font-semibold shadow-sm hover:bg-[color:var(--brand-strong)] transition-colors">
+              <Link to="/report/lost" className="inline-flex items-center justify-center rounded-md bg-[color:var(--brand)] px-5 py-2.5 text-white font-semibold shadow-sm hover:bg-[color:var(--brand-strong)] transition-colors">
                 Report Lost Item
               </Link>
               <Link to="/search" className="inline-flex items-center justify-center rounded-md border border-[color:var(--brand)]/20 bg-white/90 px-5 py-2.5 text-[var(--ink)] font-semibold hover:bg-[color:var(--brand)]/10 transition-colors backdrop-blur">
@@ -146,7 +146,7 @@ export default function LandingPage() {
         <div className="grid md:grid-cols-3 gap-5">
           <ActionCard
             title="Report Lost"
-            to="/report"
+            to="/report/lost"
             desc="Create a report in under a minute with details and a photo."
             icon={
               <svg className="size-5" viewBox="0 0 24 24" fill="currentColor"><path d="M5 4h14a1 1 0 0 1 1 1v12.5a.5.5 0 0 1-.8.4L15 14H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/></svg>
@@ -369,7 +369,7 @@ export default function LandingPage() {
             <p className="text-white/80">Join the CCS community in keeping items safe and returning them quickly.</p>
           </div>
           <div className="flex gap-3">
-      <Link to="/report" className="inline-flex items-center justify-center rounded-md bg-white px-4 py-2.5 text-[color:var(--brand-strong)] font-semibold hover:bg-white/90 transition-colors">Report</Link>
+      <Link to="/report/lost" className="inline-flex items-center justify-center rounded-md bg-white px-4 py-2.5 text-[color:var(--brand-strong)] font-semibold hover:bg-white/90 transition-colors">Report</Link>
       <Link to="/search" className="inline-flex items-center justify-center rounded-md border border-white/30 px-4 py-2.5 text-white font-semibold hover:bg-white/10 transition-colors">Search</Link>
           </div>
         </div>

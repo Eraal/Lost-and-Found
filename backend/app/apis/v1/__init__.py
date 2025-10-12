@@ -10,6 +10,7 @@ from ...modules.notifications.routes import bp as notifications_bp
 from ...modules.admin.routes import bp as admin_bp
 from ...modules.social.routes import bp as social_bp
 from ...modules.qrcodes.routes import bp as qrcodes_bp
+from ...modules.public.routes import bp as public_bp
 
 
 def register_api(app: Flask) -> None:
@@ -71,5 +72,6 @@ def register_api(app: Flask) -> None:
     api_v1.register_blueprint(admin_bp)
     api_v1.register_blueprint(social_bp)
     api_v1.register_blueprint(qrcodes_bp)
+    api_v1.register_blueprint(public_bp)
 
     app.register_blueprint(api_v1)

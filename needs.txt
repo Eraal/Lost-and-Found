@@ -148,3 +148,19 @@ Contextual help integrated throughout the interface
 Minimal clicks to complete common tasks
 
 ## LEFT STATUS CLAIM ROUTE ADMIN
+
+
+# pull code
+cd /opt/app
+git pull
+
+# rebuild frontend and reload Nginx (if you changed FE)
+cd /opt/app/frontend
+npm ci
+npm run build
+sudo nginx -t
+sudo systemctl reload nginx
+
+# restart backend (if you changed BE)
+sudo systemctl restart ccs-lnf
+sudo journalctl -u ccs-lnf -n 100 --no-pager

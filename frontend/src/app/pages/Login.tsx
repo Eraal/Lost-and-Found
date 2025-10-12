@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../lib/useAuth";
 import { loginUser } from "../../lib/api";
 
@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [showPw, setShowPw] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const emailValid = useMemo(() => /.+@.+\..+/.test(form.email), [form.email]);
   const passwordValid = useMemo(() => form.password.length >= 8, [form.password]);
@@ -36,7 +37,12 @@ export default function LoginPage() {
   const user = await loginUser({ email: form.email, password: form.password });
   // Persist via context; include token for API auth
   login({ id: user.id, email: user.email, role: user.role, firstName: user.firstName, lastName: user.lastName, token: (user as { token?: string }).token });
-  navigate('/dashboard');
+  // Redirect to the original requested page if present (e.g., /report/lost)
+  // Type-safe extraction of prior route
+  type LocState = { from?: { pathname?: string } } | undefined
+  const st = (location && (location as unknown as { state?: LocState }).state) || undefined
+  const fromPath = (st && st.from && typeof st.from.pathname === 'string') ? st.from.pathname : undefined
+  navigate(fromPath || '/dashboard', { replace: true })
     } finally {
       setSubmitting(false);
     }

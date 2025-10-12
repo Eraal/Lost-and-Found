@@ -77,8 +77,16 @@ export async function getRecentItems(limit = 8) {
 }
 
 export async function getMonthlyStats() {
-  // Placeholder: until backend provides stats endpoint
-  return { recoveredThisMonth: 28 }
+  try {
+    const res = await fetch(`${API_BASE}/public/stats/monthly`)
+  const data = await res.json().catch(() => ({})) as unknown as { recoveredThisMonth?: unknown }
+    if (!res.ok) throw new Error('Failed')
+  const raw = data && (data as { recoveredThisMonth?: unknown }).recoveredThisMonth
+  const n = typeof raw === 'number' ? raw : Number(raw)
+    return { recoveredThisMonth: Number.isFinite(n) ? n : 0 }
+  } catch {
+    return { recoveredThisMonth: 0 }
+  }
 }
 
 // Notifications (User)
