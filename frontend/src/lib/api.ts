@@ -18,9 +18,8 @@ function normalizeImageUrl(input?: string): string | undefined {
     if (/^https?:\/\//i.test(input)) {
       if (typeof window === 'undefined') return input
       const u = new URL(input)
-      // If the path is uploads on the same hostname (ignore port/scheme), return pathname
-      const sameHost = u.hostname === window.location.hostname
-      if (sameHost && u.pathname.startsWith('/uploads/')) {
+      // If the path is /uploads on ANY host, force same-origin path so Nginx can proxy it
+      if (u.pathname.startsWith('/uploads/')) {
         return u.pathname + (u.search || '')
       }
       // Otherwise leave as-is (e.g., S3 or CDN)
@@ -202,7 +201,10 @@ export async function createLostItem(input: CreateLostItemInput, reporterUserId?
     const msg = (data && (data.error || data.message)) || 'Failed to submit report'
     throw new Error(msg)
   }
-  return data as ItemDto
+  const it = data as ItemDto
+  it.photoUrl = normalizeImageUrl(it.photoUrl || undefined) ?? null
+  it.photoThumbUrl = normalizeImageUrl(it.photoThumbUrl || undefined) ?? null
+  return it
 }
 
 export async function createFoundItem(input: CreateFoundItemInput, reporterUserId?: number): Promise<ItemDto> {
@@ -220,7 +222,10 @@ export async function createFoundItem(input: CreateFoundItemInput, reporterUserI
     const msg = (data && (data.error || data.message)) || 'Failed to submit report'
     throw new Error(msg)
   }
-  return data as ItemDto
+  const it = data as ItemDto
+  it.photoUrl = normalizeImageUrl(it.photoUrl || undefined) ?? null
+  it.photoThumbUrl = normalizeImageUrl(it.photoThumbUrl || undefined) ?? null
+  return it
 }
 
 export async function listItems(params?: { type?: 'lost' | 'found', reporterUserId?: number, limit?: number }): Promise<ItemDto[]> {
@@ -234,7 +239,12 @@ export async function listItems(params?: { type?: 'lost' | 'found', reporterUser
     const msg = (data && data.error) || 'Failed to load items'
     throw new Error(msg)
   }
-  return data.items ?? []
+  const items = (data.items ?? []) as ItemDto[]
+  return items.map((it) => ({
+    ...it,
+    photoUrl: normalizeImageUrl(it.photoUrl || undefined) ?? null,
+    photoThumbUrl: normalizeImageUrl(it.photoThumbUrl || undefined) ?? null,
+  }))
 }
 
 // Admin Items search/filter and update
@@ -256,7 +266,12 @@ export async function adminListItems(params?: { q?: string; type?: 'lost' | 'fou
   const res = await fetch(`${API_BASE}/admin/items${qs.toString() ? `?${qs.toString()}` : ''}`, { headers: authHeaders() })
   const data = await res.json().catch(() => ({})) as { items?: AdminItem[]; error?: string }
   if (!res.ok) throw new Error((data && data.error) || 'Failed to load admin items')
-  return data.items ?? []
+  const items = (data.items ?? []) as AdminItem[]
+  return items.map((it) => ({
+    ...it,
+    photoUrl: normalizeImageUrl(it.photoUrl || undefined) ?? null,
+    photoThumbUrl: normalizeImageUrl((it as unknown as ItemDto).photoThumbUrl || undefined) ?? null,
+  }))
 }
 
 export type UpdateAdminItemInput = Partial<{ title: string; description: string | null; location: string | null; occurredOn: string | null; statusUi: AdminItemUiStatus }>
@@ -968,7 +983,11 @@ export async function listSocialPosts(limit = 50): Promise<SocialPostDto[]> {
   const res = await fetch(`${API_BASE}/social/posts?limit=${limit}`)
   const data = await res.json().catch(() => ({})) as { posts?: SocialPostDto[] }
   if (!res.ok) return []
-  return data.posts ?? []
+  const posts = (data.posts ?? []) as SocialPostDto[]
+  return posts.map((p) => ({
+    ...p,
+    item: p.item ? { ...p.item, photoUrl: normalizeImageUrl(p.item.photoUrl || undefined) ?? null } : p.item,
+  }))
 }
 
 export async function createSocialPost(itemId: number, message?: string, link?: string): Promise<SocialPostDto> {

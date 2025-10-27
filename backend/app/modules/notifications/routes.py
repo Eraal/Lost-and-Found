@@ -99,7 +99,8 @@ def stream_notifications():
             yield ": connected\n\n"
             while True:
                 try:
-                    evt = q.get(timeout=30)
+                    # Keep below gunicorn's timeout to ensure periodic yields
+                    evt = q.get(timeout=15)
                 except Empty:
                     # Keep-alive
                     yield "event: ping\n" + f"data: {json.dumps({'ts': int(time.time())})}\n\n"
