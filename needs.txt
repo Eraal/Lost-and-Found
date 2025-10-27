@@ -155,8 +155,25 @@ cd /opt/app
 git pull
 
 # rebuild frontend and reload Nginx (if you changed FE)
+
+# Preferred: build locally and upload only the built assets (avoids server OOM)
+# 1) On your local machine (from repo root):
+#    npm ci -w frontend
+#    npm run -w frontend build
+# 2) Copy the local frontend/dist to the server:
+#    scp -r frontend/dist/* root@<server>:/opt/app/frontend/dist/
+# 3) On the server:
+#    sudo nginx -t
+#    sudo systemctl reload nginx
+
+# Alternative: build on the server (1GB droplets may need swap)
 cd /opt/app/frontend
-npm ci
+# If build processes are killed, add swap first (one-time):
+#   sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile && \
+#   sudo mkswap /swapfile && sudo swapon /swapfile && \
+#   echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+# Install with devDependencies to ensure `tsc` is available:
+npm ci --include=dev
 npm run build
 sudo nginx -t
 sudo systemctl reload nginx
