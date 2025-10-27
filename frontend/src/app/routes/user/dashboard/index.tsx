@@ -682,12 +682,7 @@ function ActionCard({
         <p className="text-sm text-[var(--ink-600)] mb-4 leading-relaxed">
           {description}
         </p>
-        <div className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white ${colors.button} shadow-md group-hover:shadow-lg transition-all duration-200 transform group-hover:scale-105`}>
-          <span>Open</span>
-          <svg className="size-4 group-hover:translate-x-1 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="m9 18 6-6-6-6"/>
-          </svg>
-        </div>
+        {/* Removed the redundant 'Open' button; the entire card is clickable via NavLink */}
       </div>
       <div className="absolute -bottom-4 -right-4 size-32 bg-white/5 rounded-full blur-3xl group-hover:bg-white/10 transition-colors" />
     </NavLink>
