@@ -55,6 +55,24 @@ def _item_to_dict(it: Item) -> dict:
                 thumb_url = it.photo_url.replace("/uploads/", "/uploads/thumbs/", 1)
         except Exception:
             thumb_url = None
+
+    # If thumb is a local uploads path but file is missing, fall back to original photo
+    try:
+        if thumb_url and isinstance(thumb_url, str) and thumb_url.startswith("/uploads/"):
+            base = current_app.config.get("UPLOAD_FOLDER")
+            rel = thumb_url[len("/uploads/"):]
+            candidate = os.path.join(base, rel) if base else None
+            exists = os.path.isfile(candidate) if candidate else False
+            if not exists:
+                # try legacy base (backend/uploads)
+                legacy_base = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "uploads"))
+                legacy_path = os.path.join(legacy_base, rel)
+                exists = os.path.isfile(legacy_path)
+            if not exists:
+                # thumb file missing; don't advertise thumb URL so clients use main photo
+                thumb_url = None
+    except Exception:
+        pass
     payload = {
         "id": it.id,
         "type": it.type,
@@ -64,8 +82,8 @@ def _item_to_dict(it: Item) -> dict:
         "occurredOn": it.occurred_on.isoformat() if it.occurred_on else None,
         "reportedAt": it.reported_at.isoformat() if it.reported_at else None,
         "status": it.status,
-        "photoUrl": it.photo_url,
-        "photoThumbUrl": thumb_url,
+    "photoUrl": it.photo_url,
+    "photoThumbUrl": thumb_url,
         "reporterUserId": it.reporter_user_id,
     }
     # Enrich with reporter (finder) details when relationship is available. This allows
