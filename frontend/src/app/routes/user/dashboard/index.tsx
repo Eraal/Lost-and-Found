@@ -782,6 +782,13 @@ function ActivityItem({ item }: { item: Activity }) {
     claim: '✋'
   }
 
+  // Normalize and control which statuses show a badge in the dashboard list.
+  // Hide legacy/ambiguous "open" status to avoid showing an "Open" chip here.
+  const rawStatus = String(item.status ?? '').toLowerCase()
+  const normalizedStatus = rawStatus === 'open' ? null : rawStatus
+  const showBadge = normalizedStatus === 'pending' || normalizedStatus === 'matched' || normalizedStatus === 'resolved'
+  const badgeKey = (showBadge ? normalizedStatus : null) as 'pending' | 'matched' | 'resolved' | null
+
   return (
   <div className="group flex items-center gap-4 p-4 rounded-xl bg-white/60 border border-gray-100 hover:bg-white hover:border-black/10 hover:shadow-sm transition-all duration-200">
       <div className="shrink-0">
@@ -830,10 +837,10 @@ function ActivityItem({ item }: { item: Activity }) {
         </div>
       </div>
       
-      {item.status && (
+      {badgeKey && (
         <div className="shrink-0">
-          <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border ${statusColors[(String(item.status).toLowerCase() as 'pending'|'matched'|'resolved') in statusColors ? String(item.status).toLowerCase() as 'pending'|'matched'|'resolved' : 'pending']}`}>
-            {String(item.status).charAt(0).toUpperCase() + String(item.status).slice(1)}
+          <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold border ${statusColors[badgeKey]}`}>
+            {badgeKey.charAt(0).toUpperCase() + badgeKey.slice(1)}
           </span>
         </div>
       )}
