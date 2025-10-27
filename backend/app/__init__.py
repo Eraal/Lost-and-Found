@@ -1,5 +1,5 @@
 import os
-from flask import Flask, send_from_directory
+from flask import Flask, send_from_directory, abort
 from .config import get_config
 from .extensions import db, migrate, cors
 from sqlalchemy import text
@@ -45,6 +45,24 @@ def create_app(config_name: str | None = None) -> Flask:
 
     @app.get("/uploads/<path:filename>")
     def uploads(filename: str):
-        return send_from_directory(app.config["UPLOAD_FOLDER"], filename)
+        """Serve uploaded files. Falls back to legacy path if needed.
+
+        Primary path: app.config['UPLOAD_FOLDER'] (e.g., /opt/app/uploads)
+        Legacy fallback: /opt/app/backend/uploads (used by older builds)
+        """
+        # Primary location
+        base = app.config["UPLOAD_FOLDER"]
+        primary_path = os.path.join(base, filename)
+        if os.path.isfile(primary_path):
+            return send_from_directory(base, filename)
+
+        # Legacy location (when previous default used os.getcwd() under backend)
+        legacy_base = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "uploads"))
+        legacy_path = os.path.join(legacy_base, filename)
+        if os.path.isfile(legacy_path):
+            return send_from_directory(legacy_base, filename)
+
+        # Not found in any known location
+        abort(404)
 
     return app
