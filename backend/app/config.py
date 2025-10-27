@@ -1,6 +1,10 @@
 import os
 from dataclasses import dataclass
 
+# Resolve project base directory robustly (backend/app -> backend -> repo root)
+_HERE = os.path.dirname(__file__)
+_BASE_DIR = os.path.abspath(os.path.join(_HERE, "..", ".."))
+
 
 @dataclass
 class BaseConfig:
@@ -8,9 +12,11 @@ class BaseConfig:
     SQLALCHEMY_DATABASE_URI: str = os.getenv("DATABASE_URL", "postgresql+psycopg2://postgres:postgres@localhost:5432/lostfound")
     SQLALCHEMY_TRACK_MODIFICATIONS: bool = False
     JSON_SORT_KEYS: bool = False
-    # File uploads
-    UPLOAD_FOLDER: str = os.getenv("UPLOAD_FOLDER", os.path.join(os.getcwd(), "uploads"))
+    # File uploads: default to repo-level /uploads to be stable across WorkingDirectory
+    UPLOAD_FOLDER: str = os.getenv("UPLOAD_FOLDER", os.path.join(_BASE_DIR, "uploads"))
     MAX_CONTENT_LENGTH: int = int(os.getenv("MAX_CONTENT_LENGTH", str(10 * 1024 * 1024)))  # 10 MB
+    # External URL scheme preference (affects url_for(..., _external=True))
+    PREFERRED_URL_SCHEME: str = os.getenv("PREFERRED_URL_SCHEME", "https" if os.getenv("FLASK_ENV") == "production" else "http")
     # Optional AWS S3
     S3_BUCKET_NAME: str | None = os.getenv("S3_BUCKET_NAME") or None
     S3_REGION: str | None = os.getenv("S3_REGION") or None

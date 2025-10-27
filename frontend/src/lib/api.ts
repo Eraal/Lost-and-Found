@@ -5,6 +5,33 @@
 const API_BASE = (import.meta.env.VITE_API_BASE_URL && import.meta.env.VITE_API_BASE_URL.trim())
   || (typeof window !== 'undefined' ? '/api/v1' : 'http://localhost:5000/api/v1')
 
+// Normalize image URLs to avoid mixed-content and host mismatches in production.
+// If the URL points to the same origin (including http/https) or is an absolute
+// uploads URL on the same host, convert it to a path-only URL. Leave third-party
+// hosts (e.g., S3) untouched.
+function normalizeImageUrl(input?: string): string | undefined {
+  try {
+    if (!input) return undefined
+    // Already a path
+    if (input.startsWith('/uploads/')) return input
+    // Absolute URL
+    if (/^https?:\/\//i.test(input)) {
+      if (typeof window === 'undefined') return input
+      const u = new URL(input)
+      // If the path is uploads on the same hostname (ignore port/scheme), return pathname
+      const sameHost = u.hostname === window.location.hostname
+      if (sameHost && u.pathname.startsWith('/uploads/')) {
+        return u.pathname + (u.search || '')
+      }
+      // Otherwise leave as-is (e.g., S3 or CDN)
+      return input
+    }
+    return input
+  } catch {
+    return input
+  }
+}
+
 function currentToken(): string | null {
   try {
     const raw = localStorage.getItem('ccslf:user')
@@ -47,7 +74,8 @@ function toItemLite(x: unknown, fallbackId: number): ItemLite {
     // Derive date from common fields
     const date = typeof obj.date === 'string' ? obj.date : (typeof obj.occurredOn === 'string' ? (obj.occurredOn as string) : (typeof obj.reportedAt === 'string' ? (obj.reportedAt as string) : undefined))
     // Accept either imageUrl or photoUrl
-    const imageUrl = typeof obj.imageUrl === 'string' ? obj.imageUrl : (typeof obj.photoThumbUrl === 'string' ? (obj.photoThumbUrl as string) : (typeof obj.photoUrl === 'string' ? (obj.photoUrl as string) : undefined))
+  let imageUrl = typeof obj.imageUrl === 'string' ? obj.imageUrl : (typeof obj.photoThumbUrl === 'string' ? (obj.photoThumbUrl as string) : (typeof obj.photoUrl === 'string' ? (obj.photoUrl as string) : undefined))
+  imageUrl = normalizeImageUrl(imageUrl)
     const description = typeof obj.description === 'string' ? obj.description : undefined
     const status = typeof obj.status === 'string' ? obj.status : undefined
     return { id, name, type, location, date, imageUrl, description, status }
@@ -376,7 +404,7 @@ export async function listClaims(params?: { claimantUserId?: number, itemId?: nu
     createdAt: c.createdAt ?? null,
     approvedAt: c.approvedAt ?? null,
     notes: c.notes ?? null,
-  item: c.item,
+  item: c.item ? { ...c.item, photoUrl: (normalizeImageUrl(c.item.photoUrl || undefined) ?? null) } : c.item,
   user: c.user,
   adminNote: c.adminNote ?? null,
   returned: c.returned ?? false,

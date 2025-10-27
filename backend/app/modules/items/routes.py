@@ -355,8 +355,9 @@ def create_item():
                     with open(tpath, 'wb') as f:
                         f.write(thumb_bytes)
 
-                photo_url = url_for("uploads", filename=fname, _external=True)
-                photo_thumb_url = url_for("uploads", filename=f"thumbs/{fname}", _external=True) if thumb_bytes is not None else None
+                # Store relative URLs to avoid mixed-content and host coupling; Nginx proxies /uploads
+                photo_url = url_for("uploads", filename=fname, _external=False)
+                photo_thumb_url = url_for("uploads", filename=f"thumbs/{fname}", _external=False) if thumb_bytes is not None else None
         else:
             # No file uploaded; allow URLs provided via form fields
             photo_url = (form.get("photoUrl") or form.get("photo_url") or "").strip() or None

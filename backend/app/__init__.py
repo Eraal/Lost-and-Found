@@ -4,6 +4,7 @@ from .config import get_config
 from .extensions import db, migrate, cors
 from sqlalchemy import text
 from dotenv import load_dotenv
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 
 def create_app(config_name: str | None = None) -> Flask:
@@ -13,6 +14,9 @@ def create_app(config_name: str | None = None) -> Flask:
     # Ensure .env is loaded before reading env vars
     load_dotenv()
     app.config.from_object(get_config(config_name))
+
+    # Honor proxy headers from Nginx for correct url_for(_external=True) scheme/host
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)  # type: ignore[assignment]
 
     # Init extensions
     cors.init_app(app)
