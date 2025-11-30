@@ -90,9 +90,19 @@ export default function AdminClaims() {
       const body: Record<string, unknown> = {}
       if (overrideClaimerUserId.trim()) body.claimerUserId = Number(overrideClaimerUserId.trim())
       if (overrideClaimerName.trim()) body.claimerName = overrideClaimerName.trim()
+      // Always send Bearer token in production; X-User-Id is dev-only and ignored on server
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-      if (authUser?.id) headers['X-User-Id'] = String(authUser.id)
-      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000/api/v1'}/claims/${returnPrompt.id}/return`, {
+      try {
+        const raw = localStorage.getItem('ccslf:user')
+        if (raw) {
+          const u = JSON.parse(raw)
+          if (u && typeof u.token === 'string' && u.token) headers['Authorization'] = `Bearer ${u.token}`
+        }
+      } catch {
+        // ignore token read errors
+      }
+      const apiBase = (import.meta.env.VITE_API_BASE_URL && import.meta.env.VITE_API_BASE_URL.trim()) || '/api/v1'
+      const res = await fetch(`${apiBase}/claims/${returnPrompt.id}/return`, {
         method: 'POST',
         headers,
         body: JSON.stringify(body)
