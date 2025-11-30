@@ -13,6 +13,7 @@ from ...models.match import Match
 from ...models.notification import Notification
 from ...models.social_post import SocialPost
 from ...models.app_setting import AppSetting
+import json
 from ...models.qr_code import QRCode
 try:
     from ..notifications.bus import publish as publish_notif
@@ -282,6 +283,23 @@ def list_items():
             q = q.filter(Item.reporter_user_id == reporter_id)
         except ValueError:
             pass
+
+    # Optional approval-gating for public visibility
+    try:
+        require_approval = AppSetting.get_bool("features.item_approval.required", True)
+    except Exception:
+        require_approval = True
+
+    if require_approval:
+        try:
+            raw = AppSetting.get("items.approved.set", None)
+            approved_ids = set(int(x) for x in (json.loads(raw) if raw else []))
+        except Exception:
+            approved_ids = set()
+        # Only filter when we have at least one approved id recorded. This preserves
+        # legacy installs until the first approval is made by an admin.
+        if approved_ids:
+            q = q.filter(Item.id.in_(approved_ids))
 
     items = q.order_by(Item.reported_at.desc()).limit(max(0, limit)).all()
     # NOTE: We intentionally reuse _item_to_dict which now includes optional reporter data.

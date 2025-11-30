@@ -14,6 +14,7 @@ from ...models.claim import Claim
 from ...models.notification import Notification
 from ...models.app_setting import AppSetting
 from ...models.audit_log import AuditLog
+import json
 try:
     # Reuse notifications bus for SSE
     from ..notifications.bus import publish as publish_notif  # type: ignore  # already imported above but ensure availability
@@ -96,6 +97,20 @@ def _item_to_admin_dict(item: Item, ui_status: str) -> dict:
         parts = [getattr(reporter, "first_name", None), getattr(reporter, "last_name", None)]
         reporter_name = " ".join([p for p in parts if p]) or getattr(reporter, "name", None)
 
+    # Approval flag (when feature enabled)
+    approved = False
+    try:
+        if AppSetting.get_bool("features.item_approval.required", True):
+            raw = AppSetting.get("items.approved.set", None)
+            if raw:
+                try:
+                    approved_ids = set(int(x) for x in (json.loads(raw) or []))
+                    approved = int(item.id) in approved_ids
+                except Exception:
+                    approved = False
+    except Exception:
+        approved = False
+
     return {
         "id": item.id,
         "type": item.type,
@@ -116,6 +131,7 @@ def _item_to_admin_dict(item: Item, ui_status: str) -> dict:
             "lastName": getattr(reporter, "last_name", None) if reporter else None,
             "studentId": getattr(reporter, "student_id", None) if reporter else None,
         } if reporter else None,
+        "approved": approved,
     }
 
 
@@ -446,6 +462,72 @@ def admin_mark_returned(item_id: int):
         pass
     ui_st = _derive_ui_status(it)
     return jsonify({"item": _item_to_admin_dict(it, ui_st)})
+
+
+@bp.post("/items/<int:item_id>/approve")
+def admin_approve_item(item_id: int):
+    it: Item | None = Item.query.get(item_id)
+    if not it:
+        return jsonify({"error": "Item not found"}), 404
+    # Update approved set in AppSetting
+    try:
+        raw = AppSetting.get("items.approved.set", None)
+        current = []
+        if raw:
+            try:
+                current = list(json.loads(raw) or [])
+            except Exception:
+                current = []
+        ids = set(int(x) for x in current if isinstance(x, int) or (isinstance(x, str) and str(x).isdigit()))
+        ids.add(int(item_id))
+        AppSetting.set("items.approved.set", json.dumps(sorted(ids)))
+        # Audit
+        db.session.add(AuditLog(
+            actor_user_id=getattr(getattr(g, "current_user", None), "id", None),
+            action="item_approved",
+            entity_type="item",
+            entity_id=int(item_id),
+            details={"approved": True},
+        ))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({"error": "Failed to approve item"}), 500
+
+    return jsonify({"item": _item_to_admin_dict(it, _derive_ui_status(it)), "approved": True})
+
+
+@bp.post("/items/<int:item_id>/reject")
+def admin_reject_item(item_id: int):
+    """Reject a submission by deleting the item and removing it from the approved set if present."""
+    it: Item | None = Item.query.get(item_id)
+    if not it:
+        return jsonify({"error": "Item not found"}), 404
+    try:
+        # Remove from approved set if present
+        raw = AppSetting.get("items.approved.set", None)
+        if raw:
+            try:
+                current = list(json.loads(raw) or [])
+            except Exception:
+                current = []
+            ids = [int(x) for x in current if str(x).isdigit() and int(x) != int(item_id)]
+            AppSetting.set("items.approved.set", json.dumps(sorted(set(ids))))
+        # Audit
+        db.session.add(AuditLog(
+            actor_user_id=getattr(getattr(g, "current_user", None), "id", None),
+            action="item_rejected",
+            entity_type="item",
+            entity_id=int(item_id),
+            details={"deleted": True},
+        ))
+        # Delete the item (cascades to related)
+        db.session.delete(it)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        return jsonify({"error": "Failed to reject item"}), 500
+    return jsonify({"deleted": True, "id": item_id})
 
 
 @bp.delete("/items/<int:item_id>")

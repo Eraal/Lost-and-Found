@@ -252,6 +252,7 @@ export type AdminItemUiStatus = 'unclaimed' | 'matched' | 'claim_pending' | 'cla
 export type AdminItem = ItemDto & {
   uiStatus: AdminItemUiStatus
   reporter?: { id?: number | null; email?: string | null; firstName?: string | null; lastName?: string | null; studentId?: string | null } | null
+  approved?: boolean
 }
 
 export async function adminListItems(params?: { q?: string; type?: 'lost' | 'found'; uiStatus?: AdminItemUiStatus; reporter?: string; dateFrom?: string; dateTo?: string; limit?: number }): Promise<AdminItem[]> {
@@ -298,6 +299,14 @@ export async function adminDeleteItem(itemId: number): Promise<{ deleted: boolea
   const data = await res.json().catch(() => ({})) as { deleted?: boolean; id?: number; error?: string }
   if (!res.ok || !data.deleted) throw new Error((data && data.error) || 'Failed to delete item')
   return { deleted: true, id: Number(data.id || itemId) }
+}
+
+// Admin submissions approval
+export async function adminApproveItem(itemId: number): Promise<{ approved: true; item: AdminItem }> {
+  const res = await fetch(`${API_BASE}/admin/items/${itemId}/approve`, { method: 'POST', headers: authHeaders() })
+  const data = await res.json().catch(() => ({})) as { approved?: boolean; item?: AdminItem; error?: string }
+  if (!res.ok || !data.approved || !data.item) throw new Error((data && data.error) || 'Failed to approve item')
+  return { approved: true, item: data.item }
 }
 
 // QR Codes

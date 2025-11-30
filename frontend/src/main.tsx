@@ -34,6 +34,7 @@ import AdminSocialPosts from './app/routes/admin/SocialPosts'
 import AdminQRCodes from './app/routes/admin/QRCodes'
 import AdminSystemSettings from './app/routes/admin/SystemSettings'
 import ScanItemPage from './app/pages/ScanItem'
+import AdminSubmittedItems from './app/routes/admin/SubmittedItems'
 
 const router = createBrowserRouter([
   // Public/Student app with top bar
@@ -80,6 +81,7 @@ const router = createBrowserRouter([
   { path: 'items/lost', element: <AdminItems /> },
   { path: 'items/found', element: <AdminItems /> },
   { path: 'items/matched', element: <AdminItems /> },
+    { path: 'items/submitted', element: <AdminSubmittedItems /> },
       // User Management
   { path: 'users/active', element: <AdminUsers /> },
       { path: 'users/reports', element: <SectionPage title="User Management • Reports by User" /> },

@@ -38,6 +38,7 @@ export default function AdminLayout() {
           <SectionLabel>Manage</SectionLabel>
           <AdminNav
             items={[
+              { to: '/admin/items/submitted', label: 'Submitted Items', icon: InboxIcon },
               { to: '/admin/claims', label: 'Claims Management', icon: ClaimsIcon },
               { to: '/admin/items/lost', label: 'Items Database', icon: ItemsIcon },
               { to: '/admin/users/active', label: 'User Management', icon: UsersIcon },
@@ -109,6 +110,7 @@ export default function AdminLayout() {
               <SectionLabel>Manage</SectionLabel>
               <AdminNav
                 items={[
+                  { to: '/admin/items/submitted', label: 'Submitted Items', icon: InboxIcon },
                   { to: '/admin/claims', label: 'Claims Management', icon: ClaimsIcon },
                   { to: '/admin/items/lost', label: 'Items Database', icon: ItemsIcon },
                   { to: '/admin/users/active', label: 'User Management', icon: UsersIcon },
@@ -248,6 +250,15 @@ function QrIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...props}>
       <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h3v3h-3zM20 20h-3v-3" />
+    </svg>
+  )
+}
+
+function InboxIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" {...props}>
+      <path d="M3 4h18v12H3z" />
+      <path d="M3 16h6l3 3 3-3h6" />
     </svg>
   )
 }
