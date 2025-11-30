@@ -32,7 +32,12 @@ bp = Blueprint("admin", __name__, url_prefix="/admin")
 @bp.before_request
 def _require_admin():
     u = getattr(g, "current_user", None)
-    if not u or getattr(u, "role", None) != "admin":
+    if not u:
+        return jsonify({"error": "Admin access required"}), 403
+    role = getattr(u, "role", None)
+    # Handle both string and enum representations
+    role_str = str(role).lower() if role else ""
+    if role_str != "admin":
         return jsonify({"error": "Admin access required"}), 403
 
 

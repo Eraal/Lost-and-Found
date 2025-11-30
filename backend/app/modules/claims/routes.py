@@ -39,7 +39,12 @@ def _status_label(internal: str | None) -> str | None:
 def _is_admin() -> bool:
     try:
         u = getattr(g, "current_user", None)
-        return bool(u and getattr(u, "role", None) == "admin")
+        if not u:
+            return False
+        role = getattr(u, "role", None)
+        # Handle both string and enum representations
+        role_str = str(role).lower() if role else ""
+        return role_str == "admin"
     except Exception:
         return False
 

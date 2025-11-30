@@ -120,7 +120,9 @@ def register_admin():
         invite_ok = bool(provided and expected and provided == expected)
     except Exception:
         invite_ok = False
-    if not (inviter and getattr(inviter, "role", None) == "admin") and not invite_ok:
+    # Handle both string and enum representations for role
+    inviter_role = str(getattr(inviter, "role", None) or "").lower() if inviter else ""
+    if not (inviter and inviter_role == "admin") and not invite_ok:
         return _json_error("Admin registration not permitted", 403)
 
     # Create admin user
