@@ -60,14 +60,14 @@ export default function ItemDetailsModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[100] grid place-items-center" aria-modal="true" role="dialog" onMouseDown={handleBackdrop}>
+    <div className="fixed inset-0 z-[100] overflow-y-auto flex items-start justify-center p-4 sm:p-6" aria-modal="true" role="dialog" onMouseDown={handleBackdrop}>
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/45 backdrop-blur-sm" />
 
       {/* Dialog */}
       <div
         ref={dialogRef}
-        className="relative w-[min(980px,94vw)] max-h-[92vh] overflow-auto rounded-3xl border border-white/20 bg-white/95 backdrop-blur shadow-2xl shadow-black/10 ring-1 ring-black/5"
+        className="relative w-[min(980px,94vw)] max-h-[85vh] overflow-auto rounded-3xl border border-white/20 bg-white/95 backdrop-blur shadow-2xl shadow-black/10 ring-1 ring-black/5"
       >
         {/* Accent strip */}
         <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[color:var(--brand)] via-[color:var(--accent)] to-[color:var(--support)]" />

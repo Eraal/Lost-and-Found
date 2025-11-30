@@ -45,12 +45,12 @@ export default function RequestClaimModal({ open, itemTitle, onCancel, onSubmit 
   }
 
   return (
-    <div className="fixed inset-0 z-[100] grid place-items-center" aria-modal="true" role="dialog" onMouseDown={handleBackdrop}>
+  <div className="fixed inset-0 z-[100] overflow-y-auto flex items-start justify-center p-4 sm:p-6" aria-modal="true" role="dialog" onMouseDown={handleBackdrop}>
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
 
       {/* Dialog */}
-      <div ref={dialogRef} className="relative w-full max-w-md mx-4 rounded-xl border border-black/10 bg-white shadow-2xl animate-in zoom-in-95 duration-150">
+  <div ref={dialogRef} className="relative w-full max-w-md mx-4 sm:mx-6 rounded-xl border border-black/10 bg-white shadow-2xl animate-in zoom-in-95 duration-150 max-h-[85vh] overflow-y-auto">
         <div className="p-4 border-b border-black/10 flex items-center justify-between">
           <h2 className="text-base font-semibold">Request to claim</h2>
           <button

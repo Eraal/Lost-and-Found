@@ -403,7 +403,8 @@ function ItemDetailModal({ item, uiStatus, onClose }: { item: ItemDto, uiStatus:
   return (
     <div className="fixed inset-0 z-50" aria-modal="true" role="dialog" aria-labelledby="item-title" aria-describedby="item-desc">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="absolute inset-0 p-4 sm:p-6 grid place-items-center">
+      {/* Make backdrop scrollable and align modal near the top on small screens to prevent overlap */}
+      <div className="absolute inset-0 p-4 sm:p-6 overflow-y-auto flex items-start justify-center">
         <div
           ref={ref}
           className="relative w-full max-w-3xl overflow-hidden rounded-2xl border border-black/10 bg-white shadow-2xl ring-1 ring-black/5 animate-in"
@@ -429,7 +430,7 @@ function ItemDetailModal({ item, uiStatus, onClose }: { item: ItemDto, uiStatus:
           </div>
 
           {/* Content */}
-          <div className="p-5">
+          <div className="p-5 max-h-[80vh] overflow-y-auto">
             <h2 id="item-title" className="text-2xl font-semibold text-slate-900 mb-1">{item.title}</h2>
             {item.description && (
               <p id="item-desc" className="text-slate-700 leading-relaxed mb-4">{item.description}</p>
@@ -454,7 +455,7 @@ function ItemDetailModal({ item, uiStatus, onClose }: { item: ItemDto, uiStatus:
             </div>
 
             {/* Actions */}
-            <div className="flex items-center justify-end gap-2 pt-2">
+            <div className="flex items-center justify-end gap-2 pt-2 sticky bottom-0 bg-white">
               <button onClick={onClose} className="inline-flex items-center gap-2 h-10 px-4 rounded-xl border border-black/10 bg-white text-[var(--ink)] hover:bg-black/5 transition-colors">
                 Close
               </button>

@@ -740,7 +740,7 @@ export default function SearchPage() {
               ) : (
                 <div className="flex items-center gap-2">
                   <div className="size-2 rounded-full bg-[color:var(--brand)]"></div>
-                  {filtered.length} item{filtered.length === 1 ? '' : 's'} found
+                  {filtered.length} {typeFilter === 'lost' ? 'Lost Items Found' : `item${filtered.length === 1 ? '' : 's'} found`}
                 </div>
               )}
             </div>
