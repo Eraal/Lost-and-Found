@@ -21,6 +21,7 @@ import LoginPage from './app/pages/Login'
 import RegisterPage from './app/pages/Register'
 import HowItWorksPage from './app/pages/HowItWorks'
 import ContactPage from './app/pages/Contact'
+import AboutPage from './app/pages/About'
 import AdminProtectedRoute from './lib/AdminRoute'
 import AdminLayout from './app/routes/admin/Layout'
 import AdminDashboard from './app/routes/admin/Dashboard'
@@ -51,6 +52,7 @@ const router = createBrowserRouter([
       { path: 'register', element: <RegisterPage /> },
       { path: 'how-it-works', element: <HowItWorksPage /> },
       { path: 'contact', element: <ContactPage /> },
+      { path: 'about', element: <AboutPage /> },
   // Public QR scan route
   { path: 'scan/:code', element: <ScanItemPage /> },
       // Student area (protected)

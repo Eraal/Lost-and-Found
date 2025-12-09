@@ -160,6 +160,9 @@ function AppLayout() {
               <NavLink to="/search" className={({isActive}: { isActive: boolean }) => `relative px-3 py-1.5 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>
                 Search Items
               </NavLink>
+              <NavLink to="/about" className={({isActive}: { isActive: boolean }) => `relative px-3 py-1.5 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>
+                About
+              </NavLink>
               <NavLink to="/my-reports" className={({isActive}: { isActive: boolean }) => `relative px-3 py-1.5 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>
                 My Reports
               </NavLink>
@@ -305,6 +308,9 @@ function AppLayout() {
               <NavLink to="/how-it-works" className={({isActive}: { isActive: boolean }) => `relative px-3 py-1.5 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>
                 How It Works
               </NavLink>
+              <NavLink to="/about" className={({isActive}: { isActive: boolean }) => `relative px-3 py-1.5 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>
+                About
+              </NavLink>
               {/* CTA: Login & Register */}
               <NavLink to="/login" className={({isActive}: { isActive: boolean }) => `ml-2 relative inline-flex items-center px-3 py-1.5 rounded-md font-medium transition-colors ring-1 ${isActive ? 'bg-[color:var(--brand)] text-white ring-[color:var(--accent)]/40' : 'bg-[color:var(--brand)] text-white hover:bg-[color:var(--brand-strong)] ring-[color:var(--accent)]/40'} shadow-sm`}>
                 Login & Register
@@ -325,6 +331,7 @@ function AppLayout() {
                 <NavLink to="/report/lost" onClick={() => setOpen(false)} className={({isActive}: { isActive: boolean }) => `px-3 py-2 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>Report Lost</NavLink>
                 <NavLink to="/report/found" onClick={() => setOpen(false)} className={({isActive}: { isActive: boolean }) => `px-3 py-2 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>Report Found</NavLink>
                 <NavLink to="/search" onClick={() => setOpen(false)} className={({isActive}: { isActive: boolean }) => `px-3 py-2 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>Search Items</NavLink>
+                <NavLink to="/about" onClick={() => setOpen(false)} className={({isActive}: { isActive: boolean }) => `px-3 py-2 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>About</NavLink>
                 <NavLink to="/my-reports" onClick={() => setOpen(false)} className={({isActive}: { isActive: boolean }) => `px-3 py-2 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>My Reports</NavLink>
                 <NavLink to="/my-claims" onClick={() => setOpen(false)} className={({isActive}: { isActive: boolean }) => `px-3 py-2 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>My Claims</NavLink>
                 <NavLink to="/settings" onClick={() => setOpen(false)} className={({isActive}: { isActive: boolean }) => `px-3 py-2 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>Profile/Settings</NavLink>
@@ -335,6 +342,7 @@ function AppLayout() {
                 <NavLink to="/" end onClick={() => setOpen(false)} className={({isActive}: { isActive: boolean }) => `px-3 py-2 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>Home</NavLink>
                 <NavLink to="/search" onClick={() => setOpen(false)} className={({isActive}: { isActive: boolean }) => `px-3 py-2 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>Browse Unclaimed Items</NavLink>
                 <NavLink to="/how-it-works" onClick={() => setOpen(false)} className={({isActive}: { isActive: boolean }) => `px-3 py-2 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>How It Works</NavLink>
+                <NavLink to="/about" onClick={() => setOpen(false)} className={({isActive}: { isActive: boolean }) => `px-3 py-2 rounded-md transition-colors ${isActive ? 'text-[color:var(--brand)] bg-[color:var(--brand)]/10 ring-1 ring-[color:var(--brand)]/20' : 'text-[var(--ink-600)] hover:text-[color:var(--brand)] hover:bg-[color:var(--brand)]/5'}`}>About</NavLink>
                 <NavLink to="/login" onClick={() => setOpen(false)} className={({isActive}: { isActive: boolean }) => `mt-1 px-3 py-2 rounded-md transition-colors ring-1 ${isActive ? 'bg-[color:var(--brand)] text-white ring-[color:var(--accent)]/40' : 'bg-[color:var(--brand)] text-white hover:bg-[color:var(--brand-strong)] ring-[color:var(--accent)]/40'}`}>Login & Register</NavLink>
               </>
             )}
