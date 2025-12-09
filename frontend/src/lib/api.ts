@@ -762,7 +762,7 @@ export type AdminDailyStats = {
 }
 
 export async function getAdminDailyStats(): Promise<AdminDailyStats> {
-  const res = await fetch(`${API_BASE}/admin/stats/daily`)
+  const res = await fetch(`${API_BASE}/admin/stats/daily`, { headers: authHeaders() })
   const data = await res.json().catch(() => ({})) as Partial<AdminDailyStats> & { error?: string }
   if (!res.ok) {
     // Fully dynamic: surface zeros on failure; caller can decide UI
@@ -781,7 +781,7 @@ export async function getAdminDailyStats(): Promise<AdminDailyStats> {
 // Admin: Overview Totals
 export type AdminOverviewStats = { lost: number; found: number; claimed: number; returned: number; pending: number }
 export async function getAdminOverviewStats(): Promise<AdminOverviewStats> {
-  const res = await fetch(`${API_BASE}/admin/stats/overview`)
+  const res = await fetch(`${API_BASE}/admin/stats/overview`, { headers: authHeaders() })
   const data = await res.json().catch(() => ({})) as Partial<AdminOverviewStats> & { error?: string }
   if (!res.ok) return { lost: 0, found: 0, claimed: 0, returned: 0, pending: 0 }
   const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v)) ? v : Number(v) || 0
@@ -798,7 +798,7 @@ export async function getAdminOverviewStats(): Promise<AdminOverviewStats> {
 export type ReportsPoint = { date: string; lost: number; found: number; total: number }
 export async function getAdminReportsSeries(days = 30): Promise<ReportsPoint[]> {
   const ds = Math.max(1, Math.min(180, days))
-  const res = await fetch(`${API_BASE}/admin/stats/reports_series?days=${ds}`)
+  const res = await fetch(`${API_BASE}/admin/stats/reports_series?days=${ds}`, { headers: authHeaders() })
   const data = await res.json().catch(() => ({})) as { points?: unknown[] }
   if (!res.ok) return []
   const points = Array.isArray(data.points) ? data.points : []
