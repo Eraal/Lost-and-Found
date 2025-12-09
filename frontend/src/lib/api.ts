@@ -673,7 +673,7 @@ export type MatchRecord = { id: number, lostItemId: number, foundItemId: number,
 export async function upsertMatch(lostItemId: number, foundItemId: number, score: number): Promise<MatchRecord> {
   const res = await fetch(`${API_BASE}/matches`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify({ lostItemId, foundItemId, score }),
   })
   const data = await res.json().catch(() => ({})) as { match?: MatchRecord, error?: string }
@@ -682,14 +682,14 @@ export async function upsertMatch(lostItemId: number, foundItemId: number, score
 }
 
 export async function confirmMatch(matchId: number): Promise<MatchRecord> {
-  const res = await fetch(`${API_BASE}/matches/${matchId}/confirm`, { method: 'POST' })
+  const res = await fetch(`${API_BASE}/matches/${matchId}/confirm`, { method: 'POST', headers: authHeaders() })
   const data = await res.json().catch(() => ({})) as { match?: MatchRecord, error?: string }
   if (!res.ok) throw new Error((data && data.error) || 'Failed to confirm match')
   return data.match as MatchRecord
 }
 
 export async function dismissMatch(matchId: number): Promise<MatchRecord> {
-  const res = await fetch(`${API_BASE}/matches/${matchId}/dismiss`, { method: 'POST' })
+  const res = await fetch(`${API_BASE}/matches/${matchId}/dismiss`, { method: 'POST', headers: authHeaders() })
   const data = await res.json().catch(() => ({})) as { match?: MatchRecord, error?: string }
   if (!res.ok) throw new Error((data && data.error) || 'Failed to dismiss match')
   return data.match as MatchRecord
@@ -706,7 +706,7 @@ export async function listMatches(params?: { status?: 'pending' | 'confirmed' | 
   if (params?.status) qs.set('status', params.status)
   if (typeof params?.limit === 'number') qs.set('limit', String(params.limit))
   if (params?.includeItems) qs.set('includeItems', '1')
-  const res = await fetch(`${API_BASE}/matches${qs.toString() ? `?${qs.toString()}` : ''}`)
+  const res = await fetch(`${API_BASE}/matches${qs.toString() ? `?${qs.toString()}` : ''}`, { headers: authHeaders() })
   const data = await res.json().catch(() => ({})) as { matches?: unknown[], error?: string }
   if (!res.ok) throw new Error((data && data.error) || 'Failed to load matches')
   const rows: unknown[] = Array.isArray(data.matches) ? data.matches as unknown[] : []
@@ -876,7 +876,7 @@ export type PendingMatchLite = {
 
 export async function listPendingMatches(limit = 5): Promise<PendingMatchLite[]> {
   const qs = new URLSearchParams({ status: 'pending', limit: String(limit) })
-  const res = await fetch(`${API_BASE}/matches?${qs.toString()}`)
+  const res = await fetch(`${API_BASE}/matches?${qs.toString()}`, { headers: authHeaders() })
   const data = await res.json().catch(() => ({})) as { matches?: unknown[] }
   if (!res.ok) return []
   const matches = Array.isArray(data.matches) ? data.matches : []
