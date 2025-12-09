@@ -277,12 +277,13 @@ def list_items():
         q = q.filter(Item.type == type_param)
 
     reporter = request.args.get("reporterUserId") or request.args.get("reporter_user_id")
+    reporter_id: int | None = None
     if reporter:
         try:
             reporter_id = int(reporter)
             q = q.filter(Item.reporter_user_id == reporter_id)
         except ValueError:
-            pass
+            reporter_id = None
 
     # Optional approval-gating for public visibility
     try:
@@ -290,7 +291,9 @@ def list_items():
     except Exception:
         require_approval = True
 
-    if require_approval:
+    # When a reporter filter is present (e.g., student's "My Reports"), always show their own items
+    # regardless of approval gating so submissions are visible immediately.
+    if require_approval and reporter_id is None:
         try:
             raw = AppSetting.get("items.approved.set", None)
             approved_ids = set(int(x) for x in (json.loads(raw) if raw else []))
